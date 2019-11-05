@@ -1,11 +1,15 @@
 # GO-NETTY
 
-[![GoDoc][1]][2] [![license-Apache 2][3]][4]
+[![GoDoc][1]][2] [![license-Apache 2][3]][4] [![Go Report Card][5]][6] [![Downloads][7]][8]
 
 [1]: https://godoc.org/github.com/go-netty/go-netty?status.svg
 [2]: https://godoc.org/github.com/go-netty/go-netty
 [3]: https://img.shields.io/badge/license-Apache%202-blue.svg
 [4]: LICENSE
+[5]: https://goreportcard.com/badge/github.com/go-netty/go-netty
+[6]: https://goreportcard.com/report/github.com/go-netty/go-netty
+[7]: https://img.shields.io/github/downloads/go-netty/go-netty/total.svg?maxAge=1800
+[8]: https://github.com/go-netty/go-netty/releases
 
 ## Introduction (介绍)
 
