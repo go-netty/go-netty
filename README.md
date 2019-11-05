@@ -76,7 +76,7 @@ func (l LogHandler) HandleActive(ctx netty.ActiveContext) {
     // 给对端发送一条消息，将进入如下流程（视编解码配置）
     // Text -> TextCodec -> LengthFieldCodec   -> Channel.Write
     // 文本     文本编码      组装协议格式（长度字段）     网络发送
-    ctx.Write("Hello Im " + l.role)
+    ctx.Write("Hello I'm " + l.role)
 
     // 向后续的handler传递控制权
     // 如果是最后一个handler或者需要中断请求可以不用调用

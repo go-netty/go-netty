@@ -68,6 +68,13 @@ func NewChannel(capacity int) ChannelFactory {
 	}
 }
 
+func NewBufferedChannel(capacity int, sizeRead int) ChannelFactory {
+	return func(id int64, ctx context.Context, pipeline Pipeline, tran transport.Transport) Channel {
+		tran = transport.BufferedTransport(tran, sizeRead)
+		return NewChannelWith(id, ctx, pipeline, tran, capacity)
+	}
+}
+
 func NewChannelWith(id int64, ctx context.Context, pipeline Pipeline, transport transport.Transport, capacity int) Channel {
 	childCtx, cancel := context.WithCancel(ctx)
 	return &channel{
