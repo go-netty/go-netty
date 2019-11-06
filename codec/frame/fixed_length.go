@@ -35,7 +35,7 @@ type fixedLengthCodec struct {
 	length int
 }
 
-func(*fixedLengthCodec) CodecName() string {
+func (*fixedLengthCodec) CodecName() string {
 	return "fixed-length-codec"
 }
 

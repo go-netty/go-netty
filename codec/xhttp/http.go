@@ -23,7 +23,6 @@ import (
 	"github.com/go-netty/go-netty/codec"
 )
 
-
 // http客户端编解码器
 // 发送请求 -> 解码回应
 func ClientCodec() codec.Codec {

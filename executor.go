@@ -77,4 +77,3 @@ func (ce *channelExecutor) HandleEvent(ctx EventContext, event Event) {
 		ctx.HandleEvent(event)
 	})
 }
-

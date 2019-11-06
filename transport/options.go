@@ -32,7 +32,7 @@ type Options struct {
 	Context context.Context
 }
 
-func(lo *Options) AddressWithoutHost() string {
+func (lo *Options) AddressWithoutHost() string {
 	_, port, err := net.SplitHostPort(lo.Address.Host)
 	utils.Assert(err)
 	return net.JoinHostPort("", port)

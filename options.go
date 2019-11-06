@@ -24,11 +24,11 @@ import (
 )
 
 type (
-	ChannelInitializer func(Channel)
-	ChannelFactory func(id int64, ctx context.Context, pipeline Pipeline, transport transport.Transport) Channel
-	PipelineFactory func() Pipeline
-	TransportFactory transport.Factory
-	ChannelIdFactory func() int64
+	ChannelInitializer     func(Channel)
+	ChannelFactory         func(id int64, ctx context.Context, pipeline Pipeline, transport transport.Transport) Channel
+	PipelineFactory        func() Pipeline
+	TransportFactory       transport.Factory
+	ChannelIdFactory       func() int64
 	ChannelExecutorFactory func(ctx context.Context) ChannelExecutor
 
 	bootstrapOptions struct {

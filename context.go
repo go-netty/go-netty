@@ -60,7 +60,6 @@ type (
 	}
 )
 
-
 type handlerContext struct {
 	pipeline Pipeline
 	handler  Handler

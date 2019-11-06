@@ -80,7 +80,7 @@ func (wp *workerPool) Stop() {
 	}
 }
 
-func(wp *workerPool) StopWait(timeout time.Duration) {
+func (wp *workerPool) StopWait(timeout time.Duration) {
 	// 停止工作队列
 	wp.Stop()
 

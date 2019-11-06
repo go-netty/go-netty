@@ -55,4 +55,3 @@ func FromContext(ctx context.Context, def *Options) *Options {
 	}
 	return def
 }
-

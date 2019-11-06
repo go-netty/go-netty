@@ -46,7 +46,7 @@ func main() {
 
 	// 设置一些参数
 	options := &websocket.Options{
-		Timeout: time.Second * 5,
+		Timeout:  time.Second * 5,
 		ServeMux: http.NewServeMux(),
 	}
 

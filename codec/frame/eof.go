@@ -58,4 +58,3 @@ func (p *eofCodec) HandleRead(ctx netty.InboundContext, message netty.Message) {
 func (*eofCodec) HandleWrite(ctx netty.OutboundContext, message netty.Message) {
 	ctx.HandleWrite(message)
 }
-

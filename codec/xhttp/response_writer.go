@@ -22,7 +22,6 @@ import (
 	"net/http"
 )
 
-
 // 构造响应
 func NewResponseWriter(protoMajor, protoMinor int) http.ResponseWriter {
 	return &responseWriter{_protoMajor: protoMajor, _protoMinor: protoMinor}

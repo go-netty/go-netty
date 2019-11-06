@@ -18,7 +18,7 @@ package utils
 
 import "fmt"
 
-func Assert(err error, msg...interface{}) {
+func Assert(err error, msg ...interface{}) {
 	if nil != err {
 		panic(fmt.Sprint(err, fmt.Sprint(msg...)))
 	}

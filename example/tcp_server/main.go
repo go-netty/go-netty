@@ -96,4 +96,3 @@ func (l LogHandler) HandleInactive(ctx netty.InactiveContext, ex netty.Exception
 	// 如果是最后一个handler或者需要中断请求可以不用调用
 	ctx.HandleInactive(ex)
 }
-

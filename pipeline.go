@@ -268,7 +268,7 @@ func (p *pipeline) fireChannelInactive(ex Exception) {
 	p.tail.HandleInactive(ex)
 }
 
-func(p *pipeline) fireChannelEvent(event Event) {
+func (p *pipeline) fireChannelEvent(event Event) {
 	p.head.HandleEvent(event)
 }
 

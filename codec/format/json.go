@@ -39,7 +39,7 @@ type jsonCodec struct {
 	disAllowUnknownFields bool
 }
 
-func(*jsonCodec) CodecName() string {
+func (*jsonCodec) CodecName() string {
 	return "json-codec"
 }
 
@@ -90,4 +90,3 @@ func (j *jsonCodec) HandleWrite(ctx netty.OutboundContext, message netty.Message
 		ctx.HandleWrite(bytes.NewReader(data))
 	}
 }
-

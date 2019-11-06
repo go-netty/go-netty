@@ -45,4 +45,3 @@ func (r *readerAt) ReadAt(p []byte, off int64) (n int, err error) {
 	// 开始读取指定大小的数据
 	return io.ReadFull(r._reader, p)
 }
-

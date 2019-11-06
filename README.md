@@ -1,6 +1,8 @@
 # GO-NETTY
 
-[![GoDoc][1]][2] [![license-Apache 2][3]][4] [![Go Report Card][5]][6] [![Downloads][7]][8]
+[![GoDoc][1]][2] [![license-Apache 2][3]][4] [![Go Report Card][5]][6] 
+
+<!--[![Downloads][7]][8]-->
 
 [1]: https://godoc.org/github.com/go-netty/go-netty?status.svg
 [2]: https://godoc.org/github.com/go-netty/go-netty

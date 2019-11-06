@@ -25,16 +25,16 @@ import (
 )
 
 type (
-	Message interface{
+	Message interface {
 	}
 
-	Event interface{
+	Event interface {
 	}
 
-	Attachment interface{
+	Attachment interface {
 	}
 
-	Handler interface{
+	Handler interface {
 	}
 
 	ActiveHandler interface {
@@ -108,12 +108,12 @@ type InactiveHandlerFunc func(ctx InactiveContext, ex Exception)
 // func for EventHandler
 type EventHandlerFunc func(ctx EventContext, event Event)
 
-func (fn ActiveHandlerFunc) HandleActive(ctx ActiveContext) { fn(ctx) }
-func (fn InboundHandlerFunc) HandleRead(ctx InboundContext, message Message) { fn(ctx, message) }
-func (fn OutboundHandlerFunc) HandleWrite(ctx OutboundContext, message Message) { fn(ctx, message) }
+func (fn ActiveHandlerFunc) HandleActive(ctx ActiveContext)                        { fn(ctx) }
+func (fn InboundHandlerFunc) HandleRead(ctx InboundContext, message Message)       { fn(ctx, message) }
+func (fn OutboundHandlerFunc) HandleWrite(ctx OutboundContext, message Message)    { fn(ctx, message) }
 func (fn ExceptionHandlerFunc) HandleException(ctx ExceptionContext, ex Exception) { fn(ctx, ex) }
-func (fn InactiveHandlerFunc) HandleInactive(ctx InactiveContext, ex Exception) { fn(ctx, ex) }
-func (fn EventHandlerFunc) HandleEvent(ctx EventContext, event Event) { fn(ctx, event) }
+func (fn InactiveHandlerFunc) HandleInactive(ctx InactiveContext, ex Exception)    { fn(ctx, ex) }
+func (fn EventHandlerFunc) HandleEvent(ctx EventContext, event Event)              { fn(ctx, event) }
 
 type headHandler struct{}
 

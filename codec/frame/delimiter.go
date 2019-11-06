@@ -110,4 +110,3 @@ func (d *delimiterCodec) HandleWrite(ctx netty.OutboundContext, message netty.Me
 		ctx.HandleWrite(message)
 	}
 }
-

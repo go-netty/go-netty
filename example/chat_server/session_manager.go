@@ -112,4 +112,3 @@ func (*sessionManager) HandleRead(ctx netty.InboundContext, message netty.Messag
 func (*sessionManager) HandleWrite(ctx netty.OutboundContext, message netty.Message) {
 	ctx.HandleWrite(message)
 }
-

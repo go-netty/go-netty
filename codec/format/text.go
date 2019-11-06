@@ -30,9 +30,9 @@ func TextCodec() codec.Codec {
 	return &textCodec{}
 }
 
-type textCodec struct {}
+type textCodec struct{}
 
-func(*textCodec) CodecName() string {
+func (*textCodec) CodecName() string {
 	return "text-codec"
 }
 

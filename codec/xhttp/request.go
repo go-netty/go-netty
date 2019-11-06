@@ -58,4 +58,3 @@ func (*requestCodec) HandleWrite(ctx netty.OutboundContext, message netty.Messag
 		ctx.HandleWrite(message)
 	}
 }
-
