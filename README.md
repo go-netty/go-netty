@@ -1,6 +1,6 @@
 # GO-NETTY
 
-[![GoDoc][1]][2] [![license-Apache 2][3]][4] [![Go Report Card][5]][6] 
+[![GoDoc][1]][2] [![license-Apache 2][3]][4] [![Go Report Card][5]][6]
 
 <!--[![Downloads][7]][8]-->
 
@@ -33,45 +33,49 @@ go-netty 大量参考了netty的设计并融合Golang本身的协程特性而开
 * docs
 * examples
 
-## Sample
+## Examples (例子)
+
+* [chat_server (基于websocket的聊天室)](./example/chat_server/main.go)  
+* [file_server (基于http的文件浏览器)](./example/file_server/main.go)  
+* [tcp_server (自义定tcp服务器)](./example/tcp_server/main.go)  
+
+## Usage (使用)
+
+> 创建bootstrap, 用于提供服务或者对外建立连接
 
 ```go
+var bootstrap = netty.NewBootstrap()
+```
 
-func main() {
+> 配置服务连接的处理器 (同样还有一个ClientInitializer 对应客户端连接处理器配置)
 
-    // 创建bootstrap
-    var bootstrap = netty.NewBootstrap()
+```go
+bootstrap.ChildInitializer(func(channel netty.Channel) {
+    channel.Pipeline().
+        // 按照自定义协议解码帧（2字节的长度字段）
+        AddLast(frame.LengthFieldCodec(binary.LittleEndian, 1024, 0, 2, 0, 0)).
+        // 消息内容为文本格式(可自定义为 json，protobuf 等编解码器)
+        AddLast(format.TextCodec()).
+        // 处理消息
+        AddLast(LogHandler{"Server"})
+})
+```
 
-    // 配置服务器连接的编解码器
-    bootstrap.ChildInitializer(func(channel netty.Channel) {
-        channel.Pipeline().
-            AddLast(frame.LengthFieldCodec(binary.LittleEndian, 1024, 0, 2, 0, 0)).
-            AddLast(format.TextCodec()).
-            AddLast(LogHandler{"Server"})
-    })
+> 配置服务器(客户端)所使用的传输协议
 
-    // 配置客户端连接的编解码器
-    bootstrap.ClientInitializer(func(channel netty.Channel) {
-        channel.Pipeline().
-            AddLast(frame.LengthFieldCodec(binary.LittleEndian, 1024, 0, 2, 0, 0)).
-            AddLast(format.TextCodec()).
-            AddLast(LogHandler{"Client"})
-    })
+```go
+bootstrap.Transport(tcp.New())
+```
 
-    // 稍后建立客户端连接
-    time.AfterFunc(time.Second, func() {
-        _, err := bootstrap.Connect("tcp://127.0.0.1:6565", nil)
-        utils.Assert(err)
-    })
+> 开始监听端口并开始提供服务，直到收到指定信号后退出
 
-    // 指定使用TCP作为传输层并工作在指定的端口上
-    // 开始服务并阻塞到接受退出信号为止
-    bootstrap.
-        Transport(tcp.New()).
-        Listen("tcp://0.0.0.0:6565").
-        RunForever(os.Kill, os.Interrupt)
-}
+```go
+bootstrap.Listen("tcp://0.0.0.0:6565").RunForever(os.Kill, os.Interrupt)
+```
 
+> LogHandler 处理器
+
+```go
 type LogHandler struct {
     role string
 }
@@ -104,14 +108,4 @@ func (l LogHandler) HandleInactive(ctx netty.InactiveContext, ex netty.Exception
     // 如果是最后一个handler或者需要中断请求可以不用调用
     ctx.HandleInactive(ex)
 }
-
-/*
-Output:
-
-Server -> active: 127.0.0.1:22142
-Client -> active: 127.0.0.1:6565
-Client -> handle read: Hello I'm Server
-Server -> handle read: Hello I'm Client
-
-*/
 ```
