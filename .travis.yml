@@ -12,7 +12,7 @@ install:
   - go get github.com/go-netty/go-netty
 
 script:
-  - go test -coverprofile=coverage.txt -covermode=atomic -bench .
+  - go test -race -coverprofile=coverage.txt -covermode=atomic ./...
 
 after_success:
   - bash <(curl -s https://codecov.io/bash)
