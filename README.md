@@ -1,6 +1,6 @@
 # GO-NETTY
 
-[![GoDoc][1]][2] [![license-Apache 2][3]][4] [![Go Report Card][5]][6] [![Build Status][9]][10] [![Coverage Statusd][11]][12]
+[![GoDoc][1]][2] [![license-Apache 2][3]][4] [![Go Report Card][5]][6] [![Build Status][9]][10] [![Coverage Status][11]][12]
 
 <!--[![Downloads][7]][8]-->
 

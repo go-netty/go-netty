@@ -17,7 +17,6 @@
 package frame
 
 import (
-	"bytes"
 	"io"
 
 	"github.com/go-netty/go-netty"
@@ -43,8 +42,6 @@ func (f *fixedLengthCodec) HandleRead(ctx netty.InboundContext, message netty.Me
 
 	// 读取指定长度的消息，并传递给下一个处理器处理
 	switch r := message.(type) {
-	case []byte:
-		ctx.HandleRead(bytes.NewReader(r))
 	case io.Reader:
 		ctx.HandleRead(io.LimitReader(r, int64(f.length)))
 	default:
