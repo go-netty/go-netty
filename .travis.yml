@@ -9,7 +9,7 @@ before_install:
   - go get -t -v ./...
 
 install:
-  - get github.com/go-netty/go-netty
+  - go get github.com/go-netty/go-netty
 
 script:
   - go test -coverprofile=coverage.txt -covermode=atomic -bench .
