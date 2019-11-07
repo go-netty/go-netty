@@ -1,6 +1,6 @@
 # GO-NETTY
 
-[![GoDoc][1]][2] [![license-Apache 2][3]][4] [![Go Report Card][5]][6]
+[![GoDoc][1]][2] [![license-Apache 2][3]][4] [![Go Report Card][5]][6] [![Build Status][9]][10] [![Coverage Statusd][11]][12]
 
 <!--[![Downloads][7]][8]-->
 
@@ -12,6 +12,10 @@
 [6]: https://goreportcard.com/report/github.com/go-netty/go-netty
 [7]: https://img.shields.io/github/downloads/go-netty/go-netty/total.svg?maxAge=1800
 [8]: https://github.com/go-netty/go-netty/releases
+[9]: https://travis-ci.org/go-netty/go-netty.svg?branch=master
+[10]: https://travis-ci.org/go-netty/go-netty
+[11]: https://codecov.io/gh/go-netty/go-netty/branch/master/graph/badge.svg
+[12]: https://codecov.io/gh/go-netty/go-netty
 
 ## Introduction (介绍)
 
