@@ -82,13 +82,13 @@ type Acceptor interface {
 
 type Factory interface {
 
-	// 支持的Scheme
+	// Supported schemes.
 	Schemes() Schemes
 
-	// 使用指定的地址，连接对端
+	// Connect to the peer with the specified address.
 	Connect(options *Options) (Transport, error)
 
-	// 监听一个地址，接受连接请求
+	// Listen for an address and accept the connection request.
 	Listen(options *Options) (Acceptor, error)
 }
 

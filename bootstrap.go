@@ -25,6 +25,7 @@ import (
 	"github.com/go-netty/go-netty/utils"
 )
 
+// Bootstrap
 type Bootstrap interface {
 	Context() context.Context
 	WithContext(ctx context.Context) Bootstrap
@@ -42,6 +43,7 @@ type Bootstrap interface {
 	Stop() Bootstrap
 }
 
+// Create a new Bootstrap.
 func NewBootstrap() Bootstrap {
 	return new(bootstrap).
 		WithContext(context.Background()).

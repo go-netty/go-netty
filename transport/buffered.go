@@ -18,6 +18,7 @@ package transport
 
 import "bufio"
 
+// Optimize system calls with bufio.Reader
 func BufferedTransport(transport Transport, sizeRead int) Transport {
 	switch transport.(type) {
 	case *bufferedTransport:

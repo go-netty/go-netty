@@ -23,12 +23,13 @@ import (
 	"github.com/go-netty/go-netty/utils"
 )
 
+// Message processing pipeline
 type Pipeline interface {
 
-	// add handler to first.
+	// add a handler to the first.
 	AddFirst(handlers ...Handler) Pipeline
 
-	// add handler to last.
+	// add a handler to the last.
 	AddLast(handlers ...Handler) Pipeline
 
 	// add handlers in position.
@@ -61,10 +62,12 @@ type Pipeline interface {
 	fireChannelEvent(event Event)
 }
 
+// Convert to PipelineFactory
 func NewPipeline() PipelineFactory {
 	return NewPipelineWith
 }
 
+// Create a new pipeline.
 func NewPipelineWith() Pipeline {
 
 	p := &pipeline{}
@@ -235,7 +238,7 @@ func (p *pipeline) Channel() Channel {
 
 func (p *pipeline) serveChannel(channel Channel) {
 
-	utils.AssertIf(nil != p.channel, "already attached channel.")
+	utils.AssertIf(nil != p.channel, "already attached channel")
 	p.channel = channel
 
 	defer func() {

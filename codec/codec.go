@@ -18,10 +18,12 @@ package codec
 
 import "github.com/go-netty/go-netty"
 
+// Codec
 type Codec interface {
 	netty.CodecHandler
 }
 
+// Wrap InboundHandler and OutboundHandler into Codec.
 func Combine(name string, inbound netty.InboundHandler, outbound netty.OutboundHandler) Codec {
 	return &combineCodec{_name: name, InboundHandler: inbound, OutboundHandler: outbound}
 }

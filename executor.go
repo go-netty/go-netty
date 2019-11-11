@@ -23,19 +23,20 @@ import (
 	"github.com/go-netty/go-netty/utils"
 )
 
+// ChannelExecutor
 type ChannelExecutor interface {
 	InboundHandler
 	EventHandler
 }
 
-// 固定数量的协程进行消息处理
+// A fixed number of coroutines for event processing
 func NewFixedChannelExecutor(taskCap int, workerNum int) ChannelExecutorFactory {
 	return func(_ctx context.Context) ChannelExecutor {
 		return &channelExecutor{WorkerPool: utils.NewWorkerPool(taskCap, workerNum, workerNum, _ctx)}
 	}
 }
 
-// 弹性数量的协程消息处理, 可以设置最大值
+// Flexible number of coroutine event processing, allowing setting maximum
 func NewFlexibleChannelExecutor(taskCap int, idleWorker, maxWorker int) ChannelExecutorFactory {
 	return func(_ctx context.Context) ChannelExecutor {
 		return &channelExecutor{WorkerPool: utils.NewWorkerPool(taskCap, idleWorker, maxWorker, _ctx)}
@@ -50,14 +51,14 @@ func (ce *channelExecutor) HandleRead(ctx InboundContext, message Message) {
 
 	ce.AddTask(func() {
 
-		// 捕获异常
+		// capture exception
 		defer func() {
 			if err := recover(); nil != err {
 				ctx.Channel().Pipeline().fireChannelException(AsException(err, debug.Stack()))
 			}
 		}()
 
-		// 执行任务
+		// do HandleRead
 		ctx.HandleRead(message)
 	})
 }
@@ -66,14 +67,14 @@ func (ce *channelExecutor) HandleEvent(ctx EventContext, event Event) {
 
 	ce.AddTask(func() {
 
-		// 捕获异常
+		// capture exception
 		defer func() {
 			if err := recover(); nil != err {
 				ctx.Channel().Pipeline().fireChannelException(AsException(err, debug.Stack()))
 			}
 		}()
 
-		// 执行任务
+		// do HandleEvent
 		ctx.HandleEvent(event)
 	})
 }

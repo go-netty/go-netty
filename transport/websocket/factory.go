@@ -95,7 +95,7 @@ func (w *websocketFactory) upgradeHTTP(writer http.ResponseWriter, request *http
 	}, path: request.URL.Path}:
 	}
 
-	// 等待连接关闭
+	// waiting for connection to close
 	<-connCloseSignal
 }
 
@@ -105,7 +105,6 @@ func (w *websocketFactory) Listen(options *transport.Options) (transport.Accepto
 		return nil, fmt.Errorf("Invalid scheme, %v://[host]:port ", w.Schemes())
 	}
 
-	// 关闭之前的监听
 	_ = w.Close()
 
 	listen, err := net.Listen("tcp", options.AddressWithoutHost())
@@ -138,7 +137,8 @@ func (w *websocketFactory) Listen(options *transport.Options) (transport.Accepto
 		}
 	}()
 
-	// 等待服务器初始化
+	// temporary plan
+	// waiting for server initialization
 	time.Sleep(time.Second)
 
 	select {

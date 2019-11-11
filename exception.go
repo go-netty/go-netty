@@ -35,6 +35,7 @@ type Exception interface {
 	PrintStackTrace(writer ...io.Writer)
 }
 
+// wrap error to Exception
 func AsException(e interface{}, stack []byte) Exception {
 
 	switch err := e.(type) {
@@ -45,6 +46,7 @@ func AsException(e interface{}, stack []byte) Exception {
 	}
 }
 
+// default exception implementation
 type exception struct {
 	error error
 	stack []byte

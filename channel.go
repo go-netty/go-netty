@@ -27,6 +27,7 @@ import (
 	"github.com/go-netty/go-netty/utils"
 )
 
+// Channel
 type Channel interface {
 	// channel id.
 	Id() int64

@@ -27,8 +27,10 @@ import (
 type Option func(options *Options) error
 
 type Options struct {
+	// 服务器的监听地址，客户端的连接地址
 	Address *url.URL
 
+	// 其他的配置项通过context.WithValue进行传递
 	Context context.Context
 }
 

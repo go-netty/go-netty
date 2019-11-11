@@ -19,6 +19,7 @@ package format
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"io"
 	"strings"
 
@@ -55,8 +56,7 @@ func (j *jsonCodec) HandleRead(ctx netty.InboundContext, message netty.Message) 
 	case io.Reader:
 		msgReader = r
 	default:
-		// 不认识的类型，交给下一个处理器处理
-		ctx.HandleRead(message)
+		utils.Assert(fmt.Errorf("unsupported type: %T", message))
 		return
 	}
 
