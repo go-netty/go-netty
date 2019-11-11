@@ -44,7 +44,7 @@ type (
 	}
 )
 
-// 顺序序号生成器
+// Sequence number generator
 func SequenceId() ChannelIdFactory {
 	var id int64
 	return func() int64 {

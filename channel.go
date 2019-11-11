@@ -63,20 +63,22 @@ type Channel interface {
 	serveChannel()
 }
 
+// NewChannel
 func NewChannel(capacity int) ChannelFactory {
 	return func(id int64, ctx context.Context, pipeline Pipeline, transport transport.Transport) Channel {
-		return NewChannelWith(id, ctx, pipeline, transport, capacity)
+		return newChannelWith(id, ctx, pipeline, transport, capacity)
 	}
 }
 
+// NewBufferedChannel
 func NewBufferedChannel(capacity int, sizeRead int) ChannelFactory {
 	return func(id int64, ctx context.Context, pipeline Pipeline, tran transport.Transport) Channel {
 		tran = transport.BufferedTransport(tran, sizeRead)
-		return NewChannelWith(id, ctx, pipeline, tran, capacity)
+		return newChannelWith(id, ctx, pipeline, tran, capacity)
 	}
 }
 
-func NewChannelWith(id int64, ctx context.Context, pipeline Pipeline, transport transport.Transport, capacity int) Channel {
+func newChannelWith(id int64, ctx context.Context, pipeline Pipeline, transport transport.Transport, capacity int) Channel {
 	childCtx, cancel := context.WithCancel(ctx)
 	return &channel{
 		id:        id,
@@ -170,13 +172,9 @@ func (c *channel) Context() context.Context {
 
 func (c *channel) serveChannel() {
 
-	// 开始写入数据
 	go c.writeLoop()
-
-	// 开始读取数据
 	c.readLoop()
 
-	// 等待连接关闭后退出
 	select {
 	case <-c.closed:
 	default:

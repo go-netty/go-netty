@@ -25,24 +25,20 @@ import (
 )
 
 type (
-	// Message abstract type.
 	// Represent different objects in different processing steps,
 	// in most cases the message type handled by the codec is mainly io.Reader / []byte,
 	// in the user handler should have been converted to a protocol object.
 	Message interface {
 	}
 
-	// Event abstract type
 	// User-defined event types, read-write timeout events, etc.
 	Event interface {
 	}
 
-	// Attachment abstract type.
 	// The object or data associated with the Channel.
 	Attachment interface {
 	}
 
-	// Handler abstract type
 	// At least one or more of the following types should be implemented
 	// ActiveHandler
 	// InboundHandler
@@ -120,17 +116,17 @@ type SimpleChannelHandler = ChannelInboundHandler
 // func for ActiveHandler
 type ActiveHandlerFunc func(ctx ActiveContext)
 
-func (fn ActiveHandlerFunc) HandleActive(ctx ActiveContext)                        { fn(ctx) }
+func (fn ActiveHandlerFunc) HandleActive(ctx ActiveContext) { fn(ctx) }
 
 // func for InboundHandler
 type InboundHandlerFunc func(ctx InboundContext, message Message)
 
-func (fn InboundHandlerFunc) HandleRead(ctx InboundContext, message Message)       { fn(ctx, message) }
+func (fn InboundHandlerFunc) HandleRead(ctx InboundContext, message Message) { fn(ctx, message) }
 
 // func for OutboundHandler
 type OutboundHandlerFunc func(ctx OutboundContext, message Message)
 
-func (fn OutboundHandlerFunc) HandleWrite(ctx OutboundContext, message Message)    { fn(ctx, message) }
+func (fn OutboundHandlerFunc) HandleWrite(ctx OutboundContext, message Message) { fn(ctx, message) }
 
 // func for ExceptionHandler
 type ExceptionHandlerFunc func(ctx ExceptionContext, ex Exception)
@@ -140,12 +136,12 @@ func (fn ExceptionHandlerFunc) HandleException(ctx ExceptionContext, ex Exceptio
 // func for InactiveHandler
 type InactiveHandlerFunc func(ctx InactiveContext, ex Exception)
 
-func (fn InactiveHandlerFunc) HandleInactive(ctx InactiveContext, ex Exception)    { fn(ctx, ex) }
+func (fn InactiveHandlerFunc) HandleInactive(ctx InactiveContext, ex Exception) { fn(ctx, ex) }
 
 // func for EventHandler
 type EventHandlerFunc func(ctx EventContext, event Event)
 
-func (fn EventHandlerFunc) HandleEvent(ctx EventContext, event Event)              { fn(ctx, event) }
+func (fn EventHandlerFunc) HandleEvent(ctx EventContext, event Event) { fn(ctx, event) }
 
 // default: headHandler.
 type headHandler struct{}

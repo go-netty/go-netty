@@ -19,8 +19,7 @@ package netty
 import "runtime/debug"
 
 type (
-	// 处理器上下文抽象类型
-	// 包装Handler处理器并提供上下文支持
+	// HandlerContext
 	HandlerContext interface {
 		Channel() Channel
 		Handler() Handler
@@ -31,44 +30,44 @@ type (
 		SetAttachment(Attachment)
 	}
 
-	// 活跃事件上下文
+	// Active event context
 	ActiveContext interface {
 		HandlerContext
 		HandleActive()
 	}
 
-	// 输入事件上下文
+	// Inbound event context
 	InboundContext interface {
 		HandlerContext
 		HandleRead(message Message)
 	}
 
-	// 输出事件上下文
+	// Outbound event context
 	OutboundContext interface {
 		HandlerContext
 		HandleWrite(message Message)
 	}
 
-	// 异常事件上下文
+	// Exception event context
 	ExceptionContext interface {
 		HandlerContext
 		HandleException(ex Exception)
 	}
 
-	// 失活事件上下文
+	// Inactivation event context
 	InactiveContext interface {
 		HandlerContext
 		HandleInactive(ex Exception)
 	}
 
-	// 自定义时间上下文
+	// Custom event context
 	EventContext interface {
 		HandlerContext
 		HandleEvent(event Event)
 	}
 )
 
-// 提供的默认上下文实现
+// Default context implementation provided
 type handlerContext struct {
 	pipeline Pipeline
 	handler  Handler
