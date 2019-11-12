@@ -104,7 +104,7 @@ func (b *bootstrap) ClientInitializer(initializer ChannelInitializer) Bootstrap 
 
 func (b *bootstrap) serveChannel(channelExecutor ChannelExecutor, channel Channel, childChannel bool) {
 
-	// 初始化流水线，注册用户定义事件处理器
+	// initialization pipeline
 	if childChannel {
 		b.childInitializer(channel)
 	} else {
@@ -127,7 +127,7 @@ func (b *bootstrap) serveChannel(channelExecutor ChannelExecutor, channel Channe
 		channel.Pipeline().AddHandler(position, channelExecutor)
 	}
 
-	// 开始服务
+	// serve channel.
 	channel.Pipeline().serveChannel(channel)
 }
 

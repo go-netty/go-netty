@@ -29,22 +29,22 @@ import (
 
 func main() {
 
-	// http处理器绑定
+	// http file server handler.
 	httpMux := http.NewServeMux()
 	httpMux.Handle("/", http.StripPrefix("/", http.FileServer(http.Dir("./"))))
 
-	// 设置编解码器
+	// channel pipeline initializer.
 	setupCodec := func(channel netty.Channel) {
 		channel.Pipeline().
-			// 解码Http请求
+			// decode http request from channel
 			AddLast(xhttp.ServerCodec()).
-			// http 请求日志打印
+			// print http access log
 			AddLast(new(httpStateHandler)).
-			// 丢给标准http.Handler处理
+			// compatible with http.Handler
 			AddLast(xhttp.Handler(httpMux))
 	}
 
-	// 设置参数开始服务
+	// setup bootstrap & startup server.
 	netty.NewBootstrap().
 		ChildInitializer(setupCodec).
 		Transport(tcp.New()).
@@ -59,17 +59,15 @@ func (*httpStateHandler) HandleActive(ctx netty.ActiveContext) {
 }
 
 func (*httpStateHandler) HandleRead(ctx netty.InboundContext, message netty.Message) {
-
 	if request, ok := message.(*http.Request); ok {
 		fmt.Printf("[%d]%s: %s %s\n", ctx.Channel().Id(), ctx.Channel().RemoteAddr(), request.Method, request.URL.Path)
 	}
-
 	ctx.HandleRead(message)
 }
 
 func (*httpStateHandler) HandleWrite(ctx netty.OutboundContext, message netty.Message) {
-	// 此处可以查看或者修改ResponseWriter
 	if responseWriter, ok := message.(http.ResponseWriter); ok {
+		// set response header.
 		responseWriter.Header().Add("x-time", time.Now().String())
 	}
 	ctx.HandleWrite(message)

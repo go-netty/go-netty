@@ -29,7 +29,7 @@ func VariableLengthCodec(maxReadLength int) codec.Codec {
 }
 
 type variableLengthCodec struct {
-	maxReadLength int // 最多一次接收的长度
+	maxReadLength int // maximum received length
 }
 
 func (*variableLengthCodec) CodecName() string {

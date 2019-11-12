@@ -81,16 +81,15 @@ func (v *varintLengthFieldCodec) HandleWrite(ctx netty.OutboundContext, message 
 	utils.AssertIf(len(bodyBytes) > v.maxFrameLength,
 		"frame length too large, frameLength(%d) > maxFrameLength(%d)", len(bodyBytes), v.maxFrameLength)
 
-	// 写入长度头
+	// encode header
 	var head = [binary.MaxVarintLen64]byte{}
 	n := binary.PutUvarint(head[:], uint64(len(bodyBytes)))
 
-	// 优化掉一次组包操作，降低内存分配操作
-	// 交给下一个处理器处理
+	// Optimize one merge operation to reduce memory allocation.
 	ctx.HandleWrite([][]byte{
-		// 头部
+		// header
 		head[:n],
-		// 身体
+		// payload
 		bodyBytes,
 	})
 

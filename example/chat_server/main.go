@@ -32,28 +32,31 @@ var ManagerInst = NewManager()
 
 func main() {
 
-	setupCodec := func(channel netty.Channel) {
-		channel.Pipeline().
-			// 超出maxFrameLength将引发异常处理
-			AddLast(frame.EofCodec(1024)).
-			// 解析json数据到map
-			AddLast(format.JsonCodec(true, false)).
-			// 记录会话
-			AddLast(ManagerInst).
-			// 自定义处理器
-			AddLast(new(chatHandler))
-	}
-
-	// 设置一些参数
+	// setup websocket params.
 	options := &websocket.Options{
 		Timeout:  time.Second * 5,
 		ServeMux: http.NewServeMux(),
 	}
 
-	// 渲染首页数据
-	options.ServeMux.HandleFunc("/", renderIndex)
+	// index page.
+	options.ServeMux.HandleFunc("/", func(writer http.ResponseWriter, request *http.Request) {
+		writer.Write(indexHtml)
+	})
 
-	// 配置并启动服务
+	// child pipeline initializer.
+	setupCodec := func(channel netty.Channel) {
+		channel.Pipeline().
+			// Exceeding maxFrameLength will throw exception handling
+			AddLast(frame.EofCodec(1024)).
+			// decode to map[string]interface{}
+			AddLast(format.JsonCodec(true, false)).
+			// session recorder.
+			AddLast(ManagerInst).
+			// chat handler.
+			AddLast(chatHandler{})
+	}
+
+	// setup bootstrap & startup server.
 	netty.NewBootstrap().
 		ChildInitializer(setupCodec).
 		Transport(websocket.New()).
@@ -61,22 +64,15 @@ func main() {
 		RunForever(os.Kill, os.Interrupt)
 }
 
-func renderIndex(writer http.ResponseWriter, request *http.Request) {
-	writer.Write(indexHtml)
-}
-
 type chatHandler struct{}
 
-func (*chatHandler) HandleActive(ctx netty.ActiveContext) {
+func (chatHandler) HandleActive(ctx netty.ActiveContext) {
 	fmt.Printf("child connection from: %s\n", ctx.Channel().RemoteAddr())
-	ctx.HandleActive()
 }
 
-func (*chatHandler) HandleRead(ctx netty.InboundContext, message netty.Message) {
+func (chatHandler) HandleRead(ctx netty.InboundContext, message netty.Message) {
 
-	path := ctx.Channel().Transport().(interface{ Path() string }).Path()
-
-	fmt.Printf("received child message from: %s%s, %v\n", ctx.Channel().RemoteAddr(), path, message)
+	fmt.Printf("received child message from: %s, %v\n", ctx.Channel().RemoteAddr(), message)
 
 	if cmd, ok := message.(map[string]interface{}); ok {
 		cmd["id"] = ctx.Channel().Id()
@@ -85,7 +81,7 @@ func (*chatHandler) HandleRead(ctx netty.InboundContext, message netty.Message) 
 	ManagerInst.Broadcast(message)
 }
 
-func (*chatHandler) HandleInactive(ctx netty.InactiveContext, ex netty.Exception) {
+func (chatHandler) HandleInactive(ctx netty.InactiveContext, ex netty.Exception) {
 	fmt.Printf("child connection loss: %s %s\n", ctx.Channel().RemoteAddr(), ex.Error())
 	ctx.HandleInactive(ex)
 }

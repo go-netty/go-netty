@@ -104,11 +104,3 @@ func (s *sessionManager) HandleInactive(ctx netty.InactiveContext, ex netty.Exce
 
 	ctx.HandleInactive(ex)
 }
-
-func (*sessionManager) HandleRead(ctx netty.InboundContext, message netty.Message) {
-	ctx.HandleRead(message)
-}
-
-func (*sessionManager) HandleWrite(ctx netty.OutboundContext, message netty.Message) {
-	ctx.HandleWrite(message)
-}

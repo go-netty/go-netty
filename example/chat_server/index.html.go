@@ -38,14 +38,14 @@ var indexHtml = []byte(`
 			};
 			socket.onopen = function(event) {
 				var ta = document.getElementById('responseText');
-				ta.value = "连接开启!";
+				ta.value = "connection open!";
 			};
 			socket.onclose = function(event) {
 				var ta = document.getElementById('responseText');
-				ta.value = ta.value + "连接被关闭";
+				ta.value = ta.value + "connection closed!";
 			};
 		} else {
-			alert("你的浏览器不支持 WebSocket！");
+			alert("Your browser does not support WebSocket!");
 		}
 
 		function send(name, message) {
@@ -55,21 +55,21 @@ var indexHtml = []byte(`
 			if (socket.readyState == WebSocket.OPEN) {
 				socket.send(JSON.stringify({"name" : name, "message" : message}));
 			} else {
-				alert("连接没有开启.");
+				alert("Connection is not open!");
 			}
 		}
 	</script>
 	<form onsubmit="return false;">
-		<h3>WebSocket 聊天室：</h3>
+		<h3>WebSocket Chatroom:</h3>
 		<textarea id="responseText" style="width: 500px; height: 300px;"></textarea>
-		<br> 
-		<input type="text" name="name"  style="width: 100px" value="Rob">
-		<input type="text" name="message"  style="width: 300px" value="Hello WebSocket">
-		<input type="button" value="发送消息" onclick="send(this.form.name.value, this.form.message.value)">
-		<input type="button" onclick="javascript:document.getElementById('responseText').value=''" value="清空聊天记录">
+		<br>
+		<input type="text" name="name" style="width: 100px" value="Rob">
+		<input type="text" name="message" style="width: 300px" value="Hello WebSocket">
+		<input type="button" value="Send" onclick="send(this.form.name.value, this.form.message.value)">
+		<input type="button" onclick="javascript:document.getElementById('responseText').value=''" value="Clear">
 	</form>
-	<br> 
-	<br> 
+	<br>
+	<br>
 </body>
 </html>
 `)
