@@ -26,7 +26,6 @@ import (
 // ChannelExecutor
 type ChannelExecutor interface {
 	InboundHandler
-	EventHandler
 }
 
 // A fixed number of coroutines for event processing
@@ -60,21 +59,5 @@ func (ce *channelExecutor) HandleRead(ctx InboundContext, message Message) {
 
 		// do HandleRead
 		ctx.HandleRead(message)
-	})
-}
-
-func (ce *channelExecutor) HandleEvent(ctx EventContext, event Event) {
-
-	ce.AddTask(func() {
-
-		// capture exception
-		defer func() {
-			if err := recover(); nil != err {
-				ctx.Channel().Pipeline().fireChannelException(AsException(err, debug.Stack()))
-			}
-		}()
-
-		// do HandleEvent
-		ctx.HandleEvent(event)
 	})
 }
