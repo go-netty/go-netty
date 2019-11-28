@@ -115,9 +115,12 @@ func (p *pipeline) AddLast(handlers ...Handler) Pipeline {
 func (p *pipeline) AddHandler(position int, handlers ...Handler) Pipeline {
 
 	// checking handler.
-	checkHandler(handlers)
+	checkHandler(handlers...)
 
-	if -1 == position {
+	// checking position.
+	utils.AssertIf(position >= p.size, "invalid position", position)
+
+	if -1 == position || position == p.size-1 {
 		return p.AddLast(handlers...)
 	}
 
@@ -152,12 +155,11 @@ func (p *pipeline) IndexOf(comp func(Handler) bool) int {
 		if comp(head.handler) {
 			return i
 		}
-		if head = head.next; head != nil {
-			continue
+		if head = head.next; head == nil {
+			break
 		}
-
-		break
 	}
+
 	return -1
 }
 
@@ -170,11 +172,9 @@ func (p *pipeline) LastIndexOf(comp func(Handler) bool) int {
 		if comp(tail.handler) {
 			return i
 		}
-		if tail = tail.prev; tail != nil {
-			continue
+		if tail = tail.prev; tail == nil {
+			break
 		}
-
-		break
 	}
 
 	return -1
@@ -190,6 +190,7 @@ func (p *pipeline) ContextAt(position int) HandlerContext {
 	for i := 0; i < position; i++ {
 		curNode = curNode.next
 	}
+
 	return curNode
 }
 
