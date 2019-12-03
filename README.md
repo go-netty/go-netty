@@ -35,13 +35,13 @@ go-netty 大量参考了netty的设计并融合Golang本身的协程特性而开
 
 * test case
 * docs
-* examples
 
 ## Examples (例子)
 
 * [chat_server (基于websocket的聊天室)](./example/chat_server/main.go)  
 * [file_server (基于http的文件浏览器)](./example/file_server/main.go)  
 * [tcp_server (自义定tcp服务器)](./example/tcp_server/main.go)  
+* [go-netty-samples (更多例子)](https://github.com/go-netty/go-netty-samples)  
 
 ## Usage (使用)
 
