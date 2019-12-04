@@ -61,7 +61,7 @@ func (d *delimiterCodec) HandleRead(ctx netty.InboundContext, message netty.Mess
 	}
 
 	readBuff := make([]byte, 0, 16)
-	tempBuff := make([]byte, len(d.delimiter))
+	tempBuff := make([]byte, 1)
 	for len(readBuff) < d.maxFrameLength {
 		// 每次读取len(delimiter)个字节
 		n := utils.AssertLength(msgReader.Read(tempBuff[:]))
