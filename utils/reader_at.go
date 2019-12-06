@@ -27,7 +27,7 @@ func ReaderAt(r io.Reader) io.ReaderAt {
 }
 
 type readerAt struct {
-	_reader io.Reader
+	reader io.Reader
 }
 
 func (r *readerAt) ReadAt(p []byte, off int64) (n int, err error) {
@@ -37,11 +37,11 @@ func (r *readerAt) ReadAt(p []byte, off int64) (n int, err error) {
 	}
 
 	// 丢弃前面指定的字节数
-	written, err := io.CopyN(ioutil.Discard, r._reader, off)
+	written, err := io.CopyN(ioutil.Discard, r.reader, off)
 	if written < off {
 		return 0, io.EOF
 	}
 
 	// 开始读取指定大小的数据
-	return io.ReadFull(r._reader, p)
+	return io.ReadFull(r.reader, p)
 }

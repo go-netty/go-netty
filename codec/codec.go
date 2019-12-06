@@ -25,15 +25,15 @@ type Codec interface {
 
 // Wrap InboundHandler and OutboundHandler into Codec.
 func Combine(name string, inbound netty.InboundHandler, outbound netty.OutboundHandler) Codec {
-	return &combineCodec{_name: name, InboundHandler: inbound, OutboundHandler: outbound}
+	return &combineCodec{name: name, InboundHandler: inbound, OutboundHandler: outbound}
 }
 
 type combineCodec struct {
-	_name string
+	name string
 	netty.InboundHandler
 	netty.OutboundHandler
 }
 
 func (c *combineCodec) CodecName() string {
-	return c._name
+	return c.name
 }

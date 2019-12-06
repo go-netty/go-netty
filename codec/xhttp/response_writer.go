@@ -24,42 +24,42 @@ import (
 
 // 构造响应
 func NewResponseWriter(protoMajor, protoMinor int) http.ResponseWriter {
-	return &responseWriter{_protoMajor: protoMajor, _protoMinor: protoMinor}
+	return &responseWriter{protoMajor: protoMajor, protoMinor: protoMinor}
 }
 
 type responseWriter struct {
-	_protoMajor, _protoMinor int
-	_statusCode              int
-	_header                  http.Header
-	_body                    bytes.Buffer
+	protoMajor, protoMinor int
+	statusCode             int
+	header                 http.Header
+	body                   bytes.Buffer
 }
 
 func (r *responseWriter) Header() http.Header {
-	if nil == r._header {
-		r._header = make(http.Header)
-		r._header.Set("server", "go-netty")
+	if nil == r.header {
+		r.header = make(http.Header)
+		r.header.Set("server", "go-netty")
 	}
-	return r._header
+	return r.header
 }
 
 func (r *responseWriter) WriteHeader(statusCode int) {
-	r._statusCode = statusCode
+	r.statusCode = statusCode
 }
 
 func (r *responseWriter) Write(b []byte) (int, error) {
-	return r._body.Write(b)
+	return r.body.Write(b)
 }
 
 func (r *responseWriter) response() *http.Response {
-	if 0 == r._statusCode {
-		r._statusCode = http.StatusOK
+	if 0 == r.statusCode {
+		r.statusCode = http.StatusOK
 	}
 	return &http.Response{
-		ProtoMajor:    r._protoMajor,
-		ProtoMinor:    r._protoMinor,
-		StatusCode:    r._statusCode,
-		Header:        r._header,
-		Body:          ioutil.NopCloser(&r._body),
-		ContentLength: int64(r._body.Len()),
+		ProtoMajor:    r.protoMajor,
+		ProtoMinor:    r.protoMinor,
+		StatusCode:    r.statusCode,
+		Header:        r.header,
+		Body:          ioutil.NopCloser(&r.body),
+		ContentLength: int64(r.body.Len()),
 	}
 }

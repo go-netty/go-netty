@@ -40,11 +40,11 @@ func Handler(handler http.Handler) codec.Codec {
 	if nil == handler {
 		handler = http.DefaultServeMux
 	}
-	return &handlerAdapter{_handler: handler}
+	return &handlerAdapter{handler: handler}
 }
 
 type handlerAdapter struct {
-	_handler http.Handler
+	handler http.Handler
 }
 
 func (*handlerAdapter) CodecName() string {
@@ -58,7 +58,7 @@ func (h *handlerAdapter) HandleRead(ctx netty.InboundContext, message netty.Mess
 		// 准备ResponseWriter
 		writer := NewResponseWriter(r.ProtoMajor, r.ProtoMinor)
 		// 回调处理器
-		h._handler.ServeHTTP(writer, r)
+		h.handler.ServeHTTP(writer, r)
 		// 写回响应
 		ctx.Write(writer)
 	default:

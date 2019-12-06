@@ -118,7 +118,7 @@ func (p *pipeline) AddHandler(position int, handlers ...Handler) Pipeline {
 	checkHandler(handlers...)
 
 	// checking position.
-	utils.AssertIf(position >= p.size, "invalid position", position)
+	utils.AssertIf(position >= p.size, "invalid position: %d", position)
 
 	if -1 == position || position == p.size-1 {
 		return p.AddLast(handlers...)

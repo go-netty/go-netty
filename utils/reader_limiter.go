@@ -23,20 +23,20 @@ import (
 
 // 限制最大可读字节数
 func NewMaxBytesReader(r io.Reader, maxBytes int) io.Reader {
-	return &maxBytesReader{_reader: r, _n: maxBytes}
+	return &maxBytesReader{reader: r, n: maxBytes}
 }
 
 type maxBytesReader struct {
-	_reader io.Reader
-	_n      int
-	_err    error
+	reader io.Reader
+	n      int
+	err    error
 }
 
 func (m *maxBytesReader) Read(p []byte) (n int, err error) {
 
 	// 上一轮留下的错误
-	if m._err != nil {
-		return 0, m._err
+	if m.err != nil {
+		return 0, m.err
 	}
 
 	// 不做任何IO操作
@@ -45,30 +45,30 @@ func (m *maxBytesReader) Read(p []byte) (n int, err error) {
 	}
 
 	// 最多读取_n + 1个字节, 多出的一个字节用于判断是否超出最大限制
-	if len(p) > m._n+1 {
-		p = p[:m._n+1]
+	if len(p) > m.n+1 {
+		p = p[:m.n+1]
 	}
 
-	n, err = m._reader.Read(p)
+	n, err = m.reader.Read(p)
 	if n > 0 {
 		// 减去已经读取的字节数
-		m._n -= n
+		m.n -= n
 
 		// 超出最大允许字节数
-		if m._n < 0 {
+		if m.n < 0 {
 			err = fmt.Errorf("read bytes too large")
 			return
 		}
 
 		// 本轮有数据，那么EOF放到下一轮返回
 		if io.EOF == err {
-			m._err, err = err, nil
+			m.err, err = err, nil
 			return
 		}
 
 		// 已经全部正常读完，下一轮返回EOF
-		if 0 == m._n {
-			m._err, err = io.EOF, nil
+		if 0 == m.n {
+			m.err, err = io.EOF, nil
 			return
 		}
 
