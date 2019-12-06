@@ -25,7 +25,7 @@ go-netty 大量参考了netty的设计并融合Golang本身的协程特性而开
 ## Feature (特性)
 
 * Extensible multi-transport protocol support, default support TCP, KCP, Websocket
-* 可扩展多种传输协议，并且默认实现了 TCP, [KCP](https://github.com/go-netty-transport/tree/master/kcp), [Websocket](https://github.com/go-netty-transport/tree/master/websocket)
+* 可扩展多种传输协议，并且默认实现了 TCP, [KCP](https://github.com/go-netty/go-netty-transport/tree/master/kcp), [Websocket](https://github.com/go-netty/go-netty-transport/tree/master/websocket)
 * Extensible multi-codec support
 * 可扩展多种解码器，默认实现了常见的编解码器
 * Based on responsibility chain model
