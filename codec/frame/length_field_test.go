@@ -51,7 +51,7 @@ func TestLengthFieldCodec_HandleWrite(t *testing.T) {
 		},
 	}
 
-	lengthFieldCodec := LengthFieldCodec(binary.LittleEndian, 1024, 0, 2, 0, 0)
+	lengthFieldCodec := LengthFieldCodec(binary.LittleEndian, 1024, 0, 2, 0, 2)
 	lengthFieldCodec.HandleWrite(ctx, text)
 	lengthFieldCodec.HandleWrite(ctx, bytes.NewReader(text))
 }
@@ -78,6 +78,6 @@ func TestLengthFieldCodec_HandleRead(t *testing.T) {
 		},
 	}
 
-	lengthFieldCodec := LengthFieldCodec(binary.LittleEndian, 1024, 0, 2, 0, 0)
+	lengthFieldCodec := LengthFieldCodec(binary.LittleEndian, 1024, 0, 2, 0, 2)
 	lengthFieldCodec.HandleRead(ctx, bytes.NewReader(packet))
 }

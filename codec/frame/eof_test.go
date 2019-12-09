@@ -61,12 +61,17 @@ func TestEofCodec_HandleRead(t *testing.T) {
 	ctx := netty.MockInboundContext{
 		MockHandleRead: func(message netty.Message) {
 
-			if !bytes.Equal(message.([]byte), text) {
-				t.Fatal(message, "!=", text)
+			msg, err := ioutil.ReadAll(message.(io.Reader))
+			if nil != err {
+				t.Fatal(err)
+			}
+
+			if !bytes.Equal(msg, text) {
+				t.Fatal(msg, "!=", text)
 			}
 		},
 	}
 
 	eofCodec := EofCodec(1024)
-	eofCodec.HandleRead(ctx, text)
+	eofCodec.HandleRead(ctx, bytes.NewReader(text))
 }
