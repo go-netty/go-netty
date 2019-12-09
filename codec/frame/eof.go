@@ -18,6 +18,7 @@ package frame
 
 import (
 	"bytes"
+	"fmt"
 	"io"
 
 	"github.com/go-netty/go-netty"
@@ -51,7 +52,7 @@ func (p *eofCodec) HandleRead(ctx netty.InboundContext, message netty.Message) {
 		// 将读取的包丢给下一个处理器处理
 		ctx.HandleRead(packetBuffer)
 	default:
-		ctx.HandleRead(message)
+		utils.Assert(fmt.Errorf("unrecognized type: %T", message))
 	}
 }
 

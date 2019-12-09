@@ -56,8 +56,7 @@ func (d *delimiterCodec) HandleRead(ctx netty.InboundContext, message netty.Mess
 	case io.Reader:
 		msgReader = r
 	default:
-		ctx.HandleRead(message)
-		return
+		utils.Assert(fmt.Errorf("unrecognized type: %T", message))
 	}
 
 	readBuff := make([]byte, 0, 16)
@@ -107,6 +106,6 @@ func (d *delimiterCodec) HandleWrite(ctx netty.OutboundContext, message netty.Me
 			bytes.NewReader(d.delimiter)),
 		)
 	default:
-		ctx.HandleWrite(message)
+		utils.Assert(fmt.Errorf("unrecognized type: %T", message))
 	}
 }

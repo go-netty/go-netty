@@ -17,6 +17,7 @@
 package frame
 
 import (
+	"fmt"
 	"io"
 
 	"github.com/go-netty/go-netty"
@@ -45,8 +46,7 @@ func (f *fixedLengthCodec) HandleRead(ctx netty.InboundContext, message netty.Me
 	case io.Reader:
 		ctx.HandleRead(io.LimitReader(r, int64(f.length)))
 	default:
-		// 对于不认识的类型直接交由下一个处理器处理
-		ctx.HandleRead(message)
+		utils.Assert(fmt.Errorf("unrecognized type: %T", message))
 	}
 }
 

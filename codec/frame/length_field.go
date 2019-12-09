@@ -20,12 +20,10 @@ import (
 	"bytes"
 	"encoding/binary"
 	"fmt"
-	"io"
-	"io/ioutil"
-
 	"github.com/go-netty/go-netty"
 	"github.com/go-netty/go-netty/codec"
 	"github.com/go-netty/go-netty/utils"
+	"io"
 )
 
 func LengthFieldCodec(
@@ -51,6 +49,7 @@ func LengthFieldCodec(
 		lengthFieldLength:   lengthFieldLength,
 		lengthAdjustment:    lengthAdjustment,
 		initialBytesToStrip: initialBytesToStrip,
+		prepender:           LengthFieldPrepender(byteOrder, lengthFieldLength, 0, false),
 	}
 }
 
@@ -61,6 +60,9 @@ type lengthFieldCodec struct {
 	lengthFieldLength   int
 	lengthAdjustment    int
 	initialBytesToStrip int
+
+	// default encoder
+	prepender netty.OutboundHandler
 }
 
 func (*lengthFieldCodec) CodecName() string {
@@ -72,110 +74,58 @@ func (l *lengthFieldCodec) HandleRead(ctx netty.InboundContext, message netty.Me
 	switch r := message.(type) {
 	case io.Reader:
 
-		// 读取包头
-		headerBuffer := make([]byte, l.lengthFieldOffset+l.lengthFieldLength+l.initialBytesToStrip)
+		lengthFieldEndOffset := l.lengthFieldOffset + l.lengthFieldLength
+
+		headerBuffer := make([]byte, lengthFieldEndOffset)
 		n, err := io.ReadFull(r, headerBuffer)
+
 		utils.AssertIf(n != len(headerBuffer) || nil != err, "read header fail, headerLength: %d, read: %d, error: %v", len(headerBuffer), n, err)
 
-		// 长度域数据
-		lengthFieldBuff := headerBuffer[l.lengthFieldOffset : l.lengthFieldOffset+l.lengthFieldLength]
+		lengthFieldBuff := headerBuffer[l.lengthFieldOffset:lengthFieldEndOffset]
 
-		// 开始读取长度域
-		var frameLength uint64
+		var frameLength int64
 		switch l.lengthFieldLength {
 		case 1:
-			frameLength = uint64(lengthFieldBuff[0])
+			frameLength = int64(lengthFieldBuff[0])
 		case 2:
-			frameLength = uint64(l.byteOrder.Uint16(lengthFieldBuff))
+			frameLength = int64(l.byteOrder.Uint16(lengthFieldBuff))
 		case 4:
-			frameLength = uint64(l.byteOrder.Uint32(lengthFieldBuff))
+			frameLength = int64(l.byteOrder.Uint32(lengthFieldBuff))
 		case 8:
-			frameLength = uint64(l.byteOrder.Uint64(lengthFieldBuff))
+			frameLength = int64(l.byteOrder.Uint64(lengthFieldBuff))
 		default:
 			utils.Assert(fmt.Errorf("should not reach here"))
 		}
 
-		utils.AssertIf(frameLength > uint64(l.maxFrameLength),
-			"frame length too large, frameLength(%d) > maxFrameLength(%d)", frameLength, l.maxFrameLength)
+		utils.AssertIf(frameLength < 0, "negative pre-adjustment length field: %d", frameLength)
 
-		// 调整数据包位置
-		if l.lengthAdjustment != 0 {
-			// 回退时最多可以回退到包头的位置
-			utils.AssertIf(l.lengthAdjustment < 0 && (l.lengthAdjustment+len(headerBuffer)) < 0,
-				"lengthAdjustment(%d) > (initialBytesToStrip(%d) + lengthFieldLength(%d) + lengthFieldOffset(%d))",
-				-l.lengthAdjustment, l.initialBytesToStrip, l.lengthFieldLength, l.lengthFieldOffset)
-			// 前进时最多可以前进到包尾的位置
-			utils.AssertIf(l.lengthAdjustment > 0 && l.lengthAdjustment > int(int64(frameLength-uint64(l.initialBytesToStrip))),
-				"lengthAdjustment(%d) < (frameLength(%d) - initialBytesToStrip(%d))",
-				l.lengthAdjustment, frameLength, l.initialBytesToStrip)
+		frameLength += int64(l.lengthAdjustment + lengthFieldEndOffset)
 
-			// 处理回退和前进
-			if l.lengthAdjustment < 0 {
-				// 处理后退
-				ctx.HandleRead(io.MultiReader(
-					// 回退的数据
-					bytes.NewReader(headerBuffer[len(headerBuffer)+l.lengthAdjustment:]),
-					// 未读取的数据
-					io.LimitReader(r, int64(frameLength-uint64(l.initialBytesToStrip))),
-				))
-			} else {
-				// 处理前进
-				ctx.HandleRead(io.NewSectionReader(
-					// 未读取的数据
-					utils.ReaderAt(r),
-					// 跳过的字节
-					int64(l.lengthAdjustment),
-					// 计算剩余的包长度
-					int64(frameLength-uint64(l.initialBytesToStrip))-int64(l.lengthAdjustment)),
-				)
-			}
+		utils.AssertIf(frameLength < int64(lengthFieldEndOffset),
+			"Adjusted frame length (%d) is less than lengthFieldEndOffset: %d", frameLength, lengthFieldEndOffset)
 
-			// 已经处理过前进或者回退
-			return
-		}
+		utils.AssertIf(frameLength > int64(l.maxFrameLength),
+			"Frame length too large, frameLength(%d) > maxFrameLength(%d)", frameLength, l.maxFrameLength)
 
-		// 不需要前进和后退的数据包
-		// 将解析出来的数据包交由下一个处理器处理
-		ctx.HandleRead(io.LimitReader(r, int64(frameLength-uint64(l.initialBytesToStrip))))
+		utils.AssertIf(int64(l.initialBytesToStrip) > frameLength,
+			"Adjusted frame length (%d) is less than initialBytesToStrip: %d", frameLength, l.initialBytesToStrip)
+
+		frameReader := io.MultiReader(
+			// lengthFieldOffset + lengthFieldLength
+			bytes.NewReader(headerBuffer),
+			// frameLength - len(headerBuffer)
+			io.LimitReader(r, frameLength-int64(lengthFieldEndOffset)),
+		)
+
+		// extract frame
+		actualFrameLength := frameLength - int64(l.initialBytesToStrip)
+		ctx.HandleRead(io.NewSectionReader(utils.ReaderAt(frameReader), int64(l.initialBytesToStrip), actualFrameLength))
+
 	default:
-		// 不认识的类型，交由下一个处理器处理
-		ctx.HandleRead(message)
+		utils.Assert(fmt.Errorf("unrecognized type: %T", message))
 	}
 }
 
 func (l *lengthFieldCodec) HandleWrite(ctx netty.OutboundContext, message netty.Message) {
-
-	var bodyBytes []byte
-
-	switch r := message.(type) {
-	case []byte:
-		bodyBytes = r
-	case io.Reader:
-		bodyBytes = utils.AssertBytes(ioutil.ReadAll(r))
-	default:
-		ctx.HandleWrite(message)
-		return
-	}
-
-	utils.AssertIf(len(bodyBytes) > l.maxFrameLength,
-		"frame length too large, frameLength(%d) > maxFrameLength(%d)", len(bodyBytes), l.maxFrameLength)
-
-	lengthBuff := make([]byte, l.lengthFieldLength)
-
-	switch l.lengthFieldLength {
-	case 1:
-		lengthBuff[0] = byte(len(bodyBytes))
-	case 2:
-		l.byteOrder.PutUint16(lengthBuff, uint16(len(bodyBytes)))
-	case 4:
-		l.byteOrder.PutUint32(lengthBuff, uint32(len(bodyBytes)))
-	case 8:
-		l.byteOrder.PutUint64(lengthBuff, uint64(len(bodyBytes)))
-	default:
-		utils.Assert(fmt.Errorf("should not reach here"))
-	}
-
-	// 优化掉一次组包操作，降低内存分配操作
-	// 批量写数据
-	ctx.HandleWrite([][]byte{lengthBuff, bodyBytes})
+	l.prepender.HandleWrite(ctx, message)
 }

@@ -17,6 +17,7 @@
 package frame
 
 import (
+	"fmt"
 	"io"
 
 	"github.com/go-netty/go-netty"
@@ -44,7 +45,7 @@ func (v *variableLengthCodec) HandleRead(ctx netty.InboundContext, message netty
 		var n = utils.AssertLength(r.Read(buff))
 		ctx.HandleRead(buff[:n])
 	default:
-		ctx.HandleRead(message)
+		utils.Assert(fmt.Errorf("unrecognized type: %T", message))
 	}
 }
 

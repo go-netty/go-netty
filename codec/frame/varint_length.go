@@ -19,6 +19,7 @@ package frame
 import (
 	"bytes"
 	"encoding/binary"
+	"fmt"
 	"io"
 	"io/ioutil"
 
@@ -60,7 +61,7 @@ func (v *varintLengthFieldCodec) HandleRead(ctx netty.InboundContext, message ne
 
 		ctx.HandleRead(bytes.NewReader(r[n:]))
 	default:
-		ctx.HandleRead(message)
+		utils.Assert(fmt.Errorf("unrecognized type: %T", message))
 	}
 }
 
@@ -74,8 +75,7 @@ func (v *varintLengthFieldCodec) HandleWrite(ctx netty.OutboundContext, message 
 	case io.Reader:
 		bodyBytes = utils.AssertBytes(ioutil.ReadAll(r))
 	default:
-		ctx.HandleWrite(message)
-		return
+		utils.Assert(fmt.Errorf("unrecognized type: %T", message))
 	}
 
 	utils.AssertIf(len(bodyBytes) > v.maxFrameLength,
