@@ -249,7 +249,7 @@ func (p *pipeline) serveChannel(channel Channel) {
 	}()
 
 	p.fireChannelActive()
-	go p.channel.serveChannel()
+	p.channel.serveChannel()
 }
 
 func (p *pipeline) fireChannelActive() {

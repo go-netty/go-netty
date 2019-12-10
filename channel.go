@@ -22,6 +22,7 @@ import (
 	"io"
 	"net"
 	"runtime/debug"
+	"sync/atomic"
 
 	"github.com/go-netty/go-netty/transport"
 	"github.com/go-netty/go-netty/utils"
@@ -87,7 +88,6 @@ func newChannelWith(id int64, ctx context.Context, pipeline Pipeline, transport 
 		pipeline:  pipeline,
 		transport: transport,
 		sendQueue: make(chan [][]byte, capacity),
-		closed:    make(chan struct{}),
 	}
 }
 
@@ -98,7 +98,8 @@ type channel struct {
 	transport  transport.Transport
 	pipeline   Pipeline
 	sendQueue  chan [][]byte
-	closed     chan struct{}
+	closed     int32
+	posted     int32
 	attachment Attachment
 }
 
@@ -130,16 +131,11 @@ func (c *channel) Writev(p [][]byte) (n int64, err error) {
 }
 
 func (c *channel) Close() error {
-
-	select {
-	case <-c.closed:
-		// broken pipe
-		return nil
-	default:
-		close(c.closed)
+	if atomic.CompareAndSwapInt32(&c.closed, 0, 1) {
 		c.cancel()
 		return c.transport.Close()
 	}
+	return nil
 }
 
 func (c *channel) Transport() transport.Transport {
@@ -171,31 +167,19 @@ func (c *channel) Context() context.Context {
 }
 
 func (c *channel) serveChannel() {
-
 	go c.writeLoop()
-	c.readLoop()
-
-	select {
-	case <-c.closed:
-	default:
-		c.pipeline.fireChannelInactive(AsException(c.ctx.Err(), debug.Stack()))
-	}
+	go c.readLoop()
 }
 
 func (c *channel) readLoop() {
 
 	defer func() {
-		if err := recover(); nil != err {
-			c.pipeline.fireChannelException(AsException(err, debug.Stack()))
-		}
+		c.postCloseEvent(AsException(recover(), debug.Stack()))
 	}()
 
 	for {
-		select {
-		case <-c.ctx.Done():
-		default:
-			c.pipeline.fireChannelRead(c.transport)
-		}
+		// 循环读取数据，直到连接关闭
+		c.pipeline.fireChannelRead(c.transport)
 	}
 }
 
@@ -203,7 +187,7 @@ func (c *channel) writeLoop() {
 
 	defer func() {
 		if err := recover(); nil != err {
-			c.pipeline.fireChannelException(AsException(err, debug.Stack()))
+			c.postCloseEvent(AsException(err, debug.Stack()))
 		}
 	}()
 
@@ -250,6 +234,16 @@ func (c *channel) writeLoop() {
 			utils.Assert(c.transport.Flush())
 		case <-c.ctx.Done():
 			return
+		}
+	}
+}
+
+func (c *channel) postCloseEvent(ex Exception) {
+	// 防止错误事件重复投递
+	if atomic.CompareAndSwapInt32(&c.posted, 0, 1) {
+		// 非主动关闭需要投递异常事件
+		if 0 == atomic.LoadInt32(&c.closed) {
+			c.pipeline.fireChannelException(ex)
 		}
 	}
 }
