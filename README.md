@@ -58,7 +58,7 @@ var bootstrap = netty.NewBootstrap()
 bootstrap.ChildInitializer(func(channel netty.Channel) {
     channel.Pipeline().
         // 按照自定义协议解码帧（2字节的长度字段）
-        AddLast(frame.LengthFieldCodec(binary.LittleEndian, 1024, 0, 2, 0, 0)).
+        AddLast(frame.LengthFieldCodec(binary.LittleEndian, 1024, 0, 2, 0, 2)).
         // 消息内容为文本格式(可自定义为 json，protobuf 等编解码器)
         AddLast(format.TextCodec()).
         // 处理消息
