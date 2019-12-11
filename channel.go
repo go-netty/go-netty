@@ -92,15 +92,14 @@ func newChannelWith(id int64, ctx context.Context, pipeline Pipeline, transport 
 }
 
 type channel struct {
-	id         int64
-	ctx        context.Context
-	cancel     context.CancelFunc
-	transport  transport.Transport
-	pipeline   Pipeline
-	sendQueue  chan [][]byte
-	closed     int32
-	posted     int32
-	attachment Attachment
+	id             int64
+	ctx            context.Context
+	cancel         context.CancelFunc
+	transport      transport.Transport
+	pipeline       Pipeline
+	attachment     Attachment
+	sendQueue      chan [][]byte
+	closed, posted int32
 }
 
 func (c *channel) Id() int64 {
@@ -191,12 +190,11 @@ func (c *channel) writeLoop() {
 		}
 	}()
 
-	// 复用buff
-	const BufferCap = 64
+	var BufferCap = cap(c.sendQueue)
 	var buffers = make(net.Buffers, 0, BufferCap)
 	var indexes = make([]int, 0, BufferCap)
 
-	// 尽量一次性发送多个数据
+	// Try to combine packet sending to optimize sending performance
 	sendWithWritev := func(data [][]byte, queue <-chan [][]byte) (int64, error) {
 
 		// reuse buffer.
@@ -214,11 +212,10 @@ func (c *channel) writeLoop() {
 				buffers = append(buffers, data...)
 				indexes = append(indexes, len(buffers))
 				// 合并到一定数量的buffer之后直接发送，防止无限撑大buffer
-				// 最大一次合并发送的size由buffer的cap来决定
-				// 这里会影响吞吐，先屏蔽掉
-				// if len(buffers) >= BufferCap {
-				//	return c.transport.Writev(&buffers)
-				// }
+				// 最大一次合并发送的size由sendQueue的cap来决定
+				if len(indexes) >= BufferCap {
+					return c.transport.Writev(transport.Buffers{Buffers: buffers, Indexes: indexes})
+				}
 			default:
 				return c.transport.Writev(transport.Buffers{Buffers: buffers, Indexes: indexes})
 			}
@@ -241,6 +238,7 @@ func (c *channel) writeLoop() {
 func (c *channel) postCloseEvent(ex Exception) {
 	// 防止错误事件重复投递
 	if atomic.CompareAndSwapInt32(&c.posted, 0, 1) {
+		// 主动关闭的不需要触发异常流程
 		// 非主动关闭需要投递异常事件
 		if 0 == atomic.LoadInt32(&c.closed) {
 			c.pipeline.fireChannelException(ex)
