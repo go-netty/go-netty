@@ -18,9 +18,6 @@ package netty
 
 import (
 	"context"
-	"os"
-	"os/signal"
-
 	"github.com/go-netty/go-netty/transport"
 	"github.com/go-netty/go-netty/utils"
 )
@@ -38,24 +35,18 @@ type Bootstrap interface {
 	ClientInitializer(initializer ChannelInitializer) Bootstrap
 	Listen(url string, option ...transport.Option) Bootstrap
 	Connect(url string, attachment Attachment, option ...transport.Option) (Channel, error)
-	RunForever(signals ...os.Signal)
-	Run() Bootstrap
+	Action(action func(Bootstrap)) Bootstrap
 	Stop() Bootstrap
 }
 
 // Create a new Bootstrap.
 func NewBootstrap() Bootstrap {
-	return new(bootstrap).
-		WithContext(context.Background()).
-		ChannelId(SequenceId()).
-		Pipeline(NewPipeline()).
-		Channel(NewChannel(128))
+	return new(bootstrap).WithContext(context.Background()).ChannelId(SequenceId()).Pipeline(NewPipeline()).Channel(NewChannel(128))
 }
 
 type bootstrap struct {
 	bootstrapOptions
-	listenOptions []transport.Option
-	acceptor      transport.Acceptor
+	acceptor transport.Acceptor
 }
 
 func (b *bootstrap) WithContext(ctx context.Context) Bootstrap {
@@ -157,14 +148,14 @@ func (b *bootstrap) serveTransport(transport transport.Transport, attachment Att
 	return channel
 }
 
-func (b *bootstrap) createListener() error {
+func (b *bootstrap) createListener(listenOptions ...transport.Option) error {
 
 	// 不需要创建
-	if len(b.listenOptions) <= 0 {
+	if len(listenOptions) <= 0 {
 		return nil
 	}
 
-	options, err := transport.ParseOptions(b.listenOptions...)
+	options, err := transport.ParseOptions(listenOptions...)
 	if nil != err {
 		return err
 	}
@@ -174,6 +165,9 @@ func (b *bootstrap) createListener() error {
 	if nil != err {
 		return err
 	}
+
+	// 关闭已有的监听器
+	b.stopListener()
 
 	b.acceptor = l
 	return nil
@@ -194,8 +188,15 @@ func (b *bootstrap) startListener() {
 				break
 			}
 
-			// 开始服务
-			b.serveTransport(t, nil, true)
+			select {
+			case <-b.Context().Done():
+				// 程序需要退出
+				_ = t.Close()
+				return
+			default:
+				// 开始服务
+				b.serveTransport(t, nil, true)
+			}
 		}
 	}()
 }
@@ -203,6 +204,7 @@ func (b *bootstrap) startListener() {
 func (b *bootstrap) stopListener() {
 	if b.acceptor != nil {
 		_ = b.acceptor.Close()
+		b.acceptor = nil
 	}
 }
 
@@ -232,51 +234,28 @@ func (b *bootstrap) Connect(url string, attachment Attachment, option ...transpo
 }
 
 func (b *bootstrap) Listen(url string, option ...transport.Option) Bootstrap {
-	b.listenOptions = []transport.Option{
+	listenOptions := []transport.Option{
 		// remote address
 		transport.WithAddress(url),
 		// context.
 		transport.WithContext(b.Context()),
 	}
-	b.listenOptions = append(b.listenOptions, option...)
+	listenOptions = append(listenOptions, option...)
+	// create listener
+	utils.Assert(b.createListener(listenOptions...))
+	// start acceptor
+	b.startListener()
+	return b
+}
+
+func (b *bootstrap) Action(action func(Bootstrap)) Bootstrap {
+	defer b.Stop()
+	action(b)
 	return b
 }
 
 func (b *bootstrap) Stop() Bootstrap {
+	b.stopListener()
 	b.bootstrapCancel()
 	return b
-}
-
-func (b *bootstrap) Run() Bootstrap {
-	go b.RunForever()
-	return b
-}
-
-func (b *bootstrap) RunForever(signals ...os.Signal) {
-
-	// 初始化listener
-	err := b.createListener()
-	utils.Assert(err)
-
-	// 启动listener
-	b.startListener()
-
-	// 关闭listener
-	defer b.stopListener()
-
-	// 停止服务
-	defer b.Stop()
-
-	// 监听信号
-	var sigChan = make(chan os.Signal, 1)
-
-	if len(signals) > 0 {
-		signal.Notify(sigChan, signals...)
-	}
-
-	// 等待收到信号或者外部主动停止
-	select {
-	case <-b.bootstrapCtx.Done():
-	case <-sigChan:
-	}
 }
