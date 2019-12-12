@@ -17,6 +17,7 @@
 package transport
 
 import (
+	"fmt"
 	"io"
 	"net"
 	"net/url"
@@ -93,6 +94,16 @@ type Factory interface {
 }
 
 type Schemes []string
+
+func (ss Schemes) FixedURL(u *url.URL) error {
+	switch {
+	case "" == u.Scheme:
+		u.Scheme = ss[0]
+	case !ss.Valid(u.Scheme):
+		return fmt.Errorf("invalid scheme, %s, available: %v", u.Scheme, ss)
+	}
+	return nil
+}
 
 func (ss Schemes) ValidURL(address string) bool {
 	u, err := url.Parse(address)

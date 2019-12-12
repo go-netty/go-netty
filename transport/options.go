@@ -18,8 +18,10 @@ package transport
 
 import (
 	"context"
+	"fmt"
 	"net"
 	"net/url"
+	"strings"
 
 	"github.com/go-netty/go-netty/utils"
 )
@@ -57,6 +59,12 @@ func ParseOptions(options ...Option) (*Options, error) {
 func WithAddress(address string) Option {
 	return func(options *Options) (err error) {
 		options.Address, err = url.Parse(address)
+		// compatible host:port
+		if nil != err && strings.Contains(err.Error(), "cannot contain colon") {
+			if addr, e := url.Parse(fmt.Sprintf("//%s", address)); nil == e {
+				options.Address, err = addr, nil
+			}
+		}
 		return err
 	}
 }

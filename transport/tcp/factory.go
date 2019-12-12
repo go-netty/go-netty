@@ -18,7 +18,6 @@ package tcp
 
 import (
 	"errors"
-	"fmt"
 	"net"
 
 	"github.com/go-netty/go-netty/transport"
@@ -39,8 +38,8 @@ func (*tcpFactory) Schemes() transport.Schemes {
 
 func (f *tcpFactory) Connect(options *transport.Options) (transport.Transport, error) {
 
-	if !f.Schemes().Valid(options.Address.Scheme) {
-		return nil, fmt.Errorf("Invalid scheme, %v://[host]:port ", f.Schemes())
+	if err := f.Schemes().FixedURL(options.Address); nil != err {
+		return nil, err
 	}
 
 	tcpOptions := FromContext(options.Context, DefaultOption)
@@ -58,8 +57,8 @@ func (f *tcpFactory) Connect(options *transport.Options) (transport.Transport, e
 
 func (f *tcpFactory) Listen(options *transport.Options) (transport.Acceptor, error) {
 
-	if !f.Schemes().Valid(options.Address.Scheme) {
-		return nil, fmt.Errorf("Invalid scheme, %v://[host]:port ", f.Schemes())
+	if err := f.Schemes().FixedURL(options.Address); nil != err {
+		return nil, err
 	}
 
 	// 关闭已有监听
