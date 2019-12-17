@@ -20,6 +20,8 @@ import (
 	"context"
 	"github.com/go-netty/go-netty/transport"
 	"github.com/go-netty/go-netty/utils"
+	"os"
+	"os/signal"
 )
 
 // Bootstrap
@@ -37,6 +39,19 @@ type Bootstrap interface {
 	Connect(url string, attachment Attachment, option ...transport.Option) (Channel, error)
 	Action(action func(Bootstrap)) Bootstrap
 	Stop() Bootstrap
+}
+
+// Wait for signal.
+func WaitSignal(signals ...os.Signal) func(Bootstrap) {
+	sigChan := make(chan os.Signal, 1)
+	signal.Notify(sigChan, signals...)
+
+	return func(bs Bootstrap) {
+		select {
+		case <-bs.Context().Done():
+		case <-sigChan:
+		}
+	}
 }
 
 // Create a new Bootstrap.
