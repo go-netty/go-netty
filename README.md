@@ -75,7 +75,7 @@ bootstrap.Transport(tcp.New())
 > 开始监听端口并开始提供服务，直到收到指定信号后退出
 
 ```go
-bootstrap.Listen("tcp://0.0.0.0:6565").RunForever(os.Kill, os.Interrupt)
+bootstrap.Listen("tcp://0.0.0.0:6565").Action(netty.WaitSignal(os.Kill, os.Interrupt))
 ```
 
 > LogHandler 处理器
