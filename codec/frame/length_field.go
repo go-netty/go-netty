@@ -24,6 +24,7 @@ import (
 	"github.com/go-netty/go-netty/codec"
 	"github.com/go-netty/go-netty/utils"
 	"io"
+	"io/ioutil"
 )
 
 func LengthFieldCodec(
@@ -117,9 +118,13 @@ func (l *lengthFieldCodec) HandleRead(ctx netty.InboundContext, message netty.Me
 			io.LimitReader(r, frameLength-int64(lengthFieldEndOffset)),
 		)
 
-		// extract frame
-		actualFrameLength := frameLength - int64(l.initialBytesToStrip)
-		ctx.HandleRead(io.NewSectionReader(utils.ReaderAt(frameReader), int64(l.initialBytesToStrip), actualFrameLength))
+		// strip bytes
+		if l.initialBytesToStrip > 0 {
+			n, err := io.CopyN(ioutil.Discard, frameReader, int64(l.initialBytesToStrip))
+			utils.AssertIf(nil != err || int64(l.initialBytesToStrip) != n, "initialBytesToStrip: %d -> %d, %v", l.initialBytesToStrip, n, err)
+		}
+
+		ctx.HandleRead(frameReader)
 
 	default:
 		utils.Assert(fmt.Errorf("unrecognized type: %T", message))
