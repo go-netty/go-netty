@@ -29,10 +29,11 @@ import (
 type Option func(options *Options) error
 
 type Options struct {
-	// 服务器的监听地址，客户端的连接地址
+	// In server side: listen address.
+	// In client side: connect address.
 	Address *url.URL
 
-	// 其他的配置项通过context.WithValue进行传递
+	// other configure pass by context.WithValue
 	Context context.Context
 }
 
@@ -64,6 +65,10 @@ func WithAddress(address string) Option {
 			if addr, e := url.Parse(fmt.Sprintf("//%s", address)); nil == e {
 				options.Address, err = addr, nil
 			}
+		}
+		// default path: /
+		if "" == options.Address.Path {
+			options.Address.Path = "/"
 		}
 		return err
 	}

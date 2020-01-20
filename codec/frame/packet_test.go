@@ -25,7 +25,7 @@ import (
 	"github.com/go-netty/go-netty"
 )
 
-func TestEofCodec_HandleWrite(t *testing.T) {
+func TestPacketCodec_HandleWrite(t *testing.T) {
 
 	var text = []byte("Hello go-netty")
 
@@ -50,11 +50,11 @@ func TestEofCodec_HandleWrite(t *testing.T) {
 		},
 	}
 
-	eofCodec := EofCodec(1024)
+	eofCodec := PacketCodec(1024)
 	eofCodec.HandleWrite(ctx, bytes.NewReader(text))
 }
 
-func TestEofCodec_HandleRead(t *testing.T) {
+func TestPacketCodec_HandleRead(t *testing.T) {
 
 	var text = []byte("Hello go-netty")
 
@@ -72,6 +72,6 @@ func TestEofCodec_HandleRead(t *testing.T) {
 		},
 	}
 
-	eofCodec := EofCodec(1024)
+	eofCodec := PacketCodec(1024)
 	eofCodec.HandleRead(ctx, bytes.NewReader(text))
 }

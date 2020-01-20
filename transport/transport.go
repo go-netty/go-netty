@@ -31,7 +31,7 @@ import (
 //
 // Transport 提供了io.ReadWriter接口, 为了适应两种不同的传输层协议，在使用时会有细微差别
 //      数据流模式下: 按照传统的 FrameCodec -> MessageCodec 处理即可
-//      数据包模式下: FrameCodec 需要指定为 EofCodec -> [FrameCodec -> MessageCodec]
+//      数据包模式下: FrameCodec 需要指定为 PacketCodec -> [FrameCodec -> MessageCodec]
 //
 
 type Addr = net.Addr
@@ -43,6 +43,8 @@ type Addr = net.Addr
 // (sizeof(协议头) + sizeof(payload))的内存用于拼接最终的协议包用于发送
 // 这里使用索引的方式标记出包与包的界限，这样就可以免除合并操作，可以极大的降低发送开销
 // 下图中Buffers中的一个.（点）代表一个[]byte，[..] 通常代表[header, payload]
+// [ [(header), (payload)], [(header), (payload1), (payload2)] ]
+//            2                                 5
 type Buffers struct {
 	// [[..], [...], [...], [....]]
 	Buffers net.Buffers

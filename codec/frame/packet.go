@@ -26,36 +26,40 @@ import (
 	"github.com/go-netty/go-netty/utils"
 )
 
-func EofCodec(maxFrameLength int) codec.Codec {
+func PacketCodec(maxFrameLength int) codec.Codec {
 	utils.AssertIf(maxFrameLength <= 0, "maxFrameLength must be a positive integer")
-	return &eofCodec{maxFrameLength: maxFrameLength}
+	return &packetCodec{maxFrameLength: maxFrameLength}
 }
 
-type eofCodec struct {
+type packetCodec struct {
 	maxFrameLength int // 最大允许数据包长度
+	buffer         []byte
 }
 
-func (*eofCodec) CodecName() string {
-	return "eof-codec"
+func (*packetCodec) CodecName() string {
+	return "packet-codec"
 }
 
-func (p *eofCodec) HandleRead(ctx netty.InboundContext, message netty.Message) {
+func (p *packetCodec) HandleRead(ctx netty.InboundContext, message netty.Message) {
+
+	// alloc packet buffer.
+	if nil == p.buffer {
+		p.buffer = make([]byte, p.maxFrameLength)
+	}
 
 	switch r := message.(type) {
 	case io.Reader:
-		// 数据包模式直接需要读取到EOF，代表当前数据包已经读完
-		var packetBuffer = new(bytes.Buffer)
-		// 需要处理最大包字节， 最大允许读取maxFrameLength, 超出则报错，防止超大数据包导致内存溢出
-		r = utils.NewMaxBytesReader(r, p.maxFrameLength)
-		utils.AssertLong(packetBuffer.ReadFrom(r))
+		n, err := r.Read(p.buffer)
+		if nil != err && err != io.EOF {
+			panic(err)
+		}
 
-		// 将读取的包丢给下一个处理器处理
-		ctx.HandleRead(packetBuffer)
+		ctx.HandleRead(bytes.NewReader(p.buffer[:n]))
 	default:
 		utils.Assert(fmt.Errorf("unrecognized type: %T", message))
 	}
 }
 
-func (*eofCodec) HandleWrite(ctx netty.OutboundContext, message netty.Message) {
+func (*packetCodec) HandleWrite(ctx netty.OutboundContext, message netty.Message) {
 	ctx.HandleWrite(message)
 }

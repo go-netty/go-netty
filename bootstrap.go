@@ -50,6 +50,7 @@ func WaitSignal(signals ...os.Signal) func(Bootstrap) {
 		select {
 		case <-bs.Context().Done():
 		case <-sigChan:
+			bs.Stop()
 		}
 	}
 }
@@ -264,7 +265,6 @@ func (b *bootstrap) Listen(url string, option ...transport.Option) Bootstrap {
 }
 
 func (b *bootstrap) Action(action func(Bootstrap)) Bootstrap {
-	defer b.Stop()
 	action(b)
 	return b
 }
