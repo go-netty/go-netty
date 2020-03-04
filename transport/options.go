@@ -59,15 +59,17 @@ func ParseOptions(options ...Option) (*Options, error) {
 
 func WithAddress(address string) Option {
 	return func(options *Options) (err error) {
-		options.Address, err = url.Parse(address)
-		// compatible host:port
-		if nil != err && strings.Contains(err.Error(), "cannot contain colon") {
-			if addr, e := url.Parse(fmt.Sprintf("//%s", address)); nil == e {
-				options.Address, err = addr, nil
+		if options.Address, err = url.Parse(address); nil != err {
+			// compatible host:port
+			switch {
+			case strings.Contains(err.Error(), "cannot contain colon"):
+				options.Address, err = url.Parse(fmt.Sprintf("//%s", address))
+			case strings.Contains(err.Error(), "missing protocol scheme"):
+				options.Address, err = url.Parse(fmt.Sprintf("//%s", address))
 			}
 		}
 		// default path: /
-		if "" == options.Address.Path {
+		if options.Address != nil && "" == options.Address.Path {
 			options.Address.Path = "/"
 		}
 		return err
