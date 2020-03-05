@@ -140,7 +140,7 @@ func (UpperHandler) HandleRead(ctx netty.InboundContext, message netty.Message) 
 
 using <code>Netcat</code> to send message  
 使用<code>Netcat</code>发送消息  
-```
+```bash
 $ echo -n -e "Hello Go-Netty\nhttps://go-netty.com\n" | nc 127.0.0.1 9527
 Hello I'm go-netty
 Hello Go-Netty -> HELLO GO-NETTY
