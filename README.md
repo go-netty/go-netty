@@ -20,12 +20,12 @@
 ## Introduction (介绍)
 
 go-netty is heavily inspired by [netty](https://github.com/netty/netty)  
-go-netty 大量参考了netty的设计并融合Golang本身的协程特性而开发的一款高性能网络库
+go-netty 是一款受netty启发的Go语言可扩展的高性能网络库
 
 ## Feature (特性)
 
-* Extensible transport support, default support TCP, KCP, Websocket
-* 可扩展多种传输协议，并且默认实现了 TCP, [KCP](https://github.com/go-netty/go-netty-transport/tree/master/kcp), [Websocket](https://github.com/go-netty/go-netty-transport/tree/master/websocket)
+* Extensible transport support, default support TCP, [UDP, QUIC, KCP, Websocket](https://github.com/go-netty/go-netty-transport)
+* 可扩展多种传输协议，并且默认实现了 TCP, [UDP, QUIC, KCP, Websocket](https://github.com/go-netty/go-netty-transport)
 * Extensible codec support
 * 可扩展多种解码器，默认实现了常见的编解码器
 * Based on responsibility chain model
@@ -34,7 +34,8 @@ go-netty 大量参考了netty的设计并融合Golang本身的协程特性而开
 * 核心库零依赖
 
 ## Documentation (文档)
-[GoDoc](https://godoc.org/github.com/go-netty/go-netty)
+* [GoDoc](https://godoc.org/github.com/go-netty/go-netty)
+* [Go-Netty.com](https://go-netty.com)
 
 ## Examples (示例)
 
@@ -44,75 +45,106 @@ go-netty 大量参考了netty的设计并融合Golang本身的协程特性而开
 * [redis_cli (简单的redis客户端)](https://github.com/go-netty/go-netty-samples/blob/master/redis_cli/main.go)
 * [go-netty-samples (更多例子)](https://github.com/go-netty/go-netty-samples)  
 
-## Usage (使用)
-
-> 创建bootstrap, 用于提供服务或者对外建立连接
-
+## Quick Start (快速开始)
 ```go
-var bootstrap = netty.NewBootstrap()
-```
+package main
 
-> 配置服务连接的处理器 (同样还有一个ClientInitializer 对应客户端连接处理器配置)
+import (
+	"fmt"
+	"strings"
+	"os"
 
-```go
-bootstrap.ChildInitializer(func(channel netty.Channel) {
-    channel.Pipeline().
-        // 按照自定义协议解码帧（2字节的长度字段）
-        AddLast(frame.LengthFieldCodec(binary.LittleEndian, 1024, 0, 2, 0, 2)).
-        // 消息内容为文本格式(可自定义为 json，protobuf 等编解码器)
-        AddLast(format.TextCodec()).
-        // 处理消息
-        AddLast(EchoHandler{"Server"})
-})
-```
+	"github.com/go-netty/go-netty"
+	"github.com/go-netty/go-netty/codec/format"
+	"github.com/go-netty/go-netty/codec/frame"
+	"github.com/go-netty/go-netty/transport/tcp"
+)
 
-> 配置服务器(客户端)所使用的传输协议
+func main() {
 
-```go
-bootstrap.Transport(tcp.New())
-```
+    // child pipeline initializer
+    // 子连接的流水线配置
+    var childPipelineInitializer = func(channel netty.Channel) {
+        channel.Pipeline().
+            // the maximum allowable packet length is 128 bytes，use \n to splite, strip delimiter
+            // 最大允许包长128字节，使用\n分割包, 丢弃分隔符
+            AddLast(frame.DelimiterCodec(128, "\n", true)).
+            // convert to string
+            // 解包出来的bytes转换为字符串
+            AddLast(format.TextCodec()).
+            // LoggerHandler, print connected/disconnected event and received messages
+            // 日志处理器, 打印连接建立断开消息，收到的消息
+            AddLast(LoggerHandler{}).
+            // UpperHandler (string to upper case)
+            // 业务处理器 (将字符串全部大写)
+            AddLast(UpperHandler{})
+    }
 
-> 开始监听端口并开始提供服务，直到收到指定信号后退出
-
-```go
-bootstrap.Listen("tcp://0.0.0.0:6565").Action(netty.WaitSignal(os.Kill, os.Interrupt))
-```
-
-> LogHandler 处理器
-
-```go
-type EchoHandler struct {
-    role string
+    // new go-netty bootstrap
+    // 配置服务器
+    netty.NewBootstrap().
+        // configure the child pipeline initializer
+        // 配置子链接的流水线配置
+        ChildInitializer(childPipelineInitializer).
+        // configure the transport protocol
+        // 配置传输使用的方式
+        Transport(tcp.New()).
+        // configure the listening address
+        // 配置监听地址
+        Listen("0.0.0.0:9527").
+        // waiting for exit signal
+        // 等待退出信号
+        Action(netty.WaitSignal(os.Interrupt)).
+        // print exit message
+        // 打印退出消息
+        Action(func(bs netty.Bootstrap) {
+            fmt.Println("server exited")
+        })
 }
 
-func (l EchoHandler) HandleActive(ctx netty.ActiveContext) {
-    fmt.Println(l.role, "->", "active:", ctx.Channel().RemoteAddr())
+type LoggerHandler struct {}
 
-    // 给对端发送一条消息，将进入如下流程（视编解码配置）
-    // Text -> TextCodec -> LengthFieldCodec   -> Channel.Write
-    // 文本     文本编码      组装协议格式（长度字段）     网络发送
-    ctx.Write("Hello I'm " + l.role)
-
-    // 向后续的handler传递控制权
-    // 如果是最后一个handler或者需要中断请求可以不用调用
-    ctx.HandleActive()
+func (LoggerHandler) HandleActive(ctx netty.ActiveContext) {
+    fmt.Println("go-netty:", "->", "active:", ctx.Channel().RemoteAddr())
+    // write welcome message
+    // 写入欢迎信息
+    ctx.Write("Hello I'm " + "go-netty")
 }
 
-func (l EchoHandler) HandleRead(ctx netty.InboundContext, message netty.Message) {
-    fmt.Println(l.role, "->", "handle read:", message)
-
-    // 向后续的handler传递控制权
-    // 如果是最后一个handler或者需要中断请求可以不用调用
+func (LoggerHandler) HandleRead(ctx netty.InboundContext, message netty.Message) {
+    fmt.Println("go-netty:", "->", "handle read:", message)
+    // leave it to the next handler(UpperHandler)
+    // 交给下一个处理器处理(按照处理器的注册顺序, 此例下一个处理器应该是UpperHandler)
     ctx.HandleRead(message)
 }
 
-func (l EchoHandler) HandleInactive(ctx netty.InactiveContext, ex netty.Exception) {
-    fmt.Println(l.role, "->", "inactive:", ctx.Channel().RemoteAddr(), ex)
-
-    // 向后续的handler传递控制权
-    // 如果是最后一个handler或者需要中断请求可以不用调用
+func (LoggerHandler) HandleInactive(ctx netty.InactiveContext, ex netty.Exception) {
+    fmt.Println("go-netty:", "->", "inactive:", ctx.Channel().RemoteAddr(), ex)
+    // disconnected，the default processing is to close the connection
+    // 连接断开了，默认处理是关闭连接
     ctx.HandleInactive(ex)
 }
+
+type UpperHandler struct {}
+
+func (UpperHandler) HandleRead(ctx netty.InboundContext, message netty.Message) {
+    // text to upper case
+    // 业务逻辑，将字符串大写化
+    text := message.(string)
+    upText := strings.ToUpper(text)
+    // write the returned result to the client
+    // 写入返回结果给客户端
+    ctx.Write(text + " -> " + upText)
+}
+```
+
+using <code>Netcat</code> to send message  
+使用<code>Netcat</code>发送消息  
+```
+$ echo -n -e "Hello Go-Netty\nhttps://go-netty.com\n" | nc 127.0.0.1 9527
+Hello I'm go-netty
+Hello Go-Netty -> HELLO GO-NETTY
+https://go-netty.com -> HTTPS://GO-NETTY.COM
 ```
 
 ## TODO (待完成)
