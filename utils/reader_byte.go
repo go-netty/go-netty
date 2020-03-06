@@ -18,11 +18,13 @@ package utils
 
 import "io"
 
+// ByteReader defines byte reader
 type ByteReader interface {
 	io.Reader
 	io.ByteReader
 }
 
+// NewByteReader create a ByteReader from io.Reader
 func NewByteReader(r io.Reader) ByteReader {
 	if br, ok := r.(ByteReader); ok {
 		return br

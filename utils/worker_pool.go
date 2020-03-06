@@ -21,18 +21,20 @@ import (
 	"time"
 )
 
+// WorkerPool defines worker pool.
 type WorkerPool interface {
-	// 添加一个任务到任务池
+	// add the task
 	AddTask(task func())
-	// 执行一个任务，执行完毕返回
+	// run the task
 	RunTask(task func())
-	// 停止任务池
+	// stop the worker pool
 	Stop()
-	// 停止所有任务并等待所有worker退出之后返回
+	// Stop all workers and wait for task execution timeout
 	StopWait(timeout time.Duration)
 }
 
-func NewWorkerPool(taskCap, idleWorker, maxWorker int, ctx context.Context) WorkerPool {
+// NewWorkerPool create a worker pool
+func NewWorkerPool(ctx context.Context, taskCap, idleWorker, maxWorker int) WorkerPool {
 
 	if idleWorker < 1 {
 		idleWorker = 1
@@ -73,9 +75,9 @@ type workerPool struct {
 func (wp *workerPool) Stop() {
 	select {
 	case <-wp.poolCtx.Done():
-		// 已经关闭的任务池
+		// closed pool
 	default:
-		// 等队列里面的任务执行完毕后关闭
+		// notify all worker to closed
 		wp.poolCancel()
 	}
 }

@@ -26,6 +26,7 @@ import (
 	"github.com/go-netty/go-netty/utils"
 )
 
+// DelimiterCodec create delimiter codec
 func DelimiterCodec(maxFrameLength int, delimiter string, stripDelimiter bool) codec.Codec {
 	utils.AssertIf(maxFrameLength <= 0, "maxFrameLength must be a positive integer")
 	utils.AssertIf(len(delimiter) <= 0, "delimiter must be a non empty string")

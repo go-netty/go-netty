@@ -16,7 +16,7 @@
 
 package netty
 
-// mock for HandlerContext
+// MockHandlerContext for mock handler context
 type MockHandlerContext struct {
 	MockChannel       func() Channel
 	MockHandler       func() Handler
@@ -27,6 +27,7 @@ type MockHandlerContext struct {
 	MockSetAttachment func(attachment Attachment)
 }
 
+// Channel to mock Channel of HandlerContext
 func (m MockHandlerContext) Channel() Channel {
 	if m.MockChannel != nil {
 		return m.MockChannel()
@@ -34,6 +35,7 @@ func (m MockHandlerContext) Channel() Channel {
 	return nil
 }
 
+// Handler to mock Handler of HandlerContext
 func (m MockHandlerContext) Handler() Handler {
 	if m.MockHandler != nil {
 		return m.MockHandler()
@@ -41,24 +43,28 @@ func (m MockHandlerContext) Handler() Handler {
 	return nil
 }
 
+// Write to mock Write of HandlerContext
 func (m MockHandlerContext) Write(message Message) {
 	if m.MockWrite != nil {
 		m.MockWrite(message)
 	}
 }
 
+// Close to mock Close of HandlerContext
 func (m MockHandlerContext) Close(err error) {
 	if m.MockClose != nil {
 		m.MockClose(err)
 	}
 }
 
+// Trigger to mock Trigger of HandlerContext
 func (m MockHandlerContext) Trigger(event Event) {
 	if m.MockTrigger != nil {
 		m.MockTrigger(event)
 	}
 }
 
+// Attachment to mock Attachment of HandlerContext
 func (m MockHandlerContext) Attachment() Attachment {
 	if m.MockAttachment != nil {
 		return m.MockAttachment()
@@ -66,30 +72,33 @@ func (m MockHandlerContext) Attachment() Attachment {
 	return nil
 }
 
+// SetAttachment to mock SetAttachment of HandlerContext
 func (m MockHandlerContext) SetAttachment(attachment Attachment) {
 	if nil != m.MockSetAttachment {
 		m.SetAttachment(attachment)
 	}
 }
 
-// mock for OutboundContext
+// MockOutboundContext mock for OutboundContext
 type MockOutboundContext struct {
 	MockHandlerContext
 	MockHandleWrite func(message Message)
 }
 
+// HandleWrite to mock HandleWrite of OutboundContext
 func (m MockOutboundContext) HandleWrite(message Message) {
 	if m.MockHandleWrite != nil {
 		m.MockHandleWrite(message)
 	}
 }
 
-// mock for InboundContext
+// MockInboundContext mock for InboundContext
 type MockInboundContext struct {
 	MockHandlerContext
 	MockHandleRead func(message Message)
 }
 
+// HandleRead to mock HandleRead of InboundContext
 func (m MockInboundContext) HandleRead(message Message) {
 	if m.MockHandleRead != nil {
 		m.MockHandleRead(message)

@@ -25,7 +25,7 @@ import (
 	"github.com/go-netty/go-netty/utils"
 )
 
-// 每次读取指定长度大小的数据
+// FixedLengthCodec create fixed length codec
 func FixedLengthCodec(length int) codec.Codec {
 	utils.AssertIf(length <= 0, "invalid fixed length")
 	return &fixedLengthCodec{length}

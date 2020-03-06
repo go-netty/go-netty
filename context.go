@@ -19,7 +19,7 @@ package netty
 import "runtime/debug"
 
 type (
-	// HandlerContext
+	// HandlerContext defines a base handler context
 	HandlerContext interface {
 		Channel() Channel
 		Handler() Handler
@@ -30,44 +30,44 @@ type (
 		SetAttachment(Attachment)
 	}
 
-	// Active event context
+	// ActiveContext defines an active handler
 	ActiveContext interface {
 		HandlerContext
 		HandleActive()
 	}
 
-	// Inbound event context
+	// InboundContext defines an inbound handler
 	InboundContext interface {
 		HandlerContext
 		HandleRead(message Message)
 	}
 
-	// Outbound event context
+	// OutboundContext defines an outbound handler
 	OutboundContext interface {
 		HandlerContext
 		HandleWrite(message Message)
 	}
 
-	// Exception event context
+	// ExceptionContext defines an exception handler
 	ExceptionContext interface {
 		HandlerContext
 		HandleException(ex Exception)
 	}
 
-	// Inactivation event context
+	// InactiveContext defines an inactive handler
 	InactiveContext interface {
 		HandlerContext
 		HandleInactive(ex Exception)
 	}
 
-	// Custom event context
+	// EventContext defines an event handler
 	EventContext interface {
 		HandlerContext
 		HandleEvent(event Event)
 	}
 )
 
-// Default context implementation provided
+// handlerContext impl HandlerContext
 type handlerContext struct {
 	pipeline Pipeline
 	handler  Handler

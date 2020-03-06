@@ -26,6 +26,7 @@ import (
 	"github.com/go-netty/go-netty/utils"
 )
 
+// TextCodec create a text codec
 func TextCodec() codec.Codec {
 	return &textCodec{}
 }

@@ -28,6 +28,7 @@ import (
 	"github.com/go-netty/go-netty/utils"
 )
 
+// VarintLengthFieldCodec create varint length field based codec
 func VarintLengthFieldCodec(maxFrameLength int) codec.Codec {
 	utils.AssertIf(maxFrameLength <= 0, "maxFrameLength must be a positive integer")
 	return &varintLengthFieldCodec{

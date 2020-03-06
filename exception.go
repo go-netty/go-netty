@@ -23,7 +23,7 @@ import (
 	"strings"
 )
 
-// Exception
+// Exception defines an exception
 type Exception interface {
 	// unwrap inner error.
 	Unwrap() error
@@ -35,7 +35,7 @@ type Exception interface {
 	PrintStackTrace(writer ...io.Writer)
 }
 
-// Wrap error to Exception
+// AsException to wrap error to Exception
 func AsException(e interface{}, stack []byte) Exception {
 
 	switch err := e.(type) {
@@ -46,24 +46,28 @@ func AsException(e interface{}, stack []byte) Exception {
 	}
 }
 
-// default exception implementation
+// exception impl Exception
 type exception struct {
 	error error
 	stack []byte
 }
 
+// Unwrap to unwrap inner error
 func (e exception) Unwrap() error {
 	return e.error
 }
 
+// Error to get error message
 func (e exception) Error() string {
 	return e.error.Error()
 }
 
+// Stack to get exception stack trace
 func (e exception) Stack() []byte {
 	return e.stack
 }
 
+// PrintStackTrace to write stack trance info to writer
 func (e exception) PrintStackTrace(writer ...io.Writer) {
 
 	// default: write to stderr.

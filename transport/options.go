@@ -26,8 +26,10 @@ import (
 	"github.com/go-netty/go-netty/utils"
 )
 
+// Option defines option function
 type Option func(options *Options) error
 
+// Options for transport
 type Options struct {
 	// In server side: listen address.
 	// In client side: connect address.
@@ -37,12 +39,14 @@ type Options struct {
 	Context context.Context
 }
 
+// AddressWithoutHost convert host:port to :port
 func (lo *Options) AddressWithoutHost() string {
 	_, port, err := net.SplitHostPort(lo.Address.Host)
 	utils.Assert(err)
 	return net.JoinHostPort("", port)
 }
 
+// Apply options
 func (lo *Options) Apply(options ...Option) error {
 	for _, option := range options {
 		if err := option(lo); nil != err {
@@ -52,11 +56,13 @@ func (lo *Options) Apply(options ...Option) error {
 	return nil
 }
 
+// ParseOptions parse options
 func ParseOptions(options ...Option) (*Options, error) {
 	option := &Options{Context: context.Background()}
 	return option, option.Apply(options...)
 }
 
+// WithAddress for server listener or client dialer
 func WithAddress(address string) Option {
 	return func(options *Options) (err error) {
 		if options.Address, err = url.Parse(address); nil != err {
@@ -76,6 +82,7 @@ func WithAddress(address string) Option {
 	}
 }
 
+// WithContext to hold other configure pass by context.WithValue
 func WithContext(ctx context.Context) Option {
 	return func(options *Options) error {
 		options.Context = ctx

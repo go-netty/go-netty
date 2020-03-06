@@ -27,6 +27,7 @@ import (
 	"io/ioutil"
 )
 
+// LengthFieldCodec create a length field based codec
 func LengthFieldCodec(
 	byteOrder binary.ByteOrder, // 字节序，大端 & 小端
 	maxFrameLength int, // 最大允许数据包长度

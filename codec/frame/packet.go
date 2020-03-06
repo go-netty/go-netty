@@ -26,6 +26,7 @@ import (
 	"github.com/go-netty/go-netty/utils"
 )
 
+// PacketCodec create packet codec
 func PacketCodec(maxFrameLength int) codec.Codec {
 	utils.AssertIf(maxFrameLength <= 0, "maxFrameLength must be a positive integer")
 	return &packetCodec{maxFrameLength: maxFrameLength}

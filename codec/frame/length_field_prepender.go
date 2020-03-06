@@ -26,6 +26,9 @@ import (
 	"io/ioutil"
 )
 
+// LengthFieldPrepender for LengthFieldCodec
+//
+// An encoder to prepends the length of the message
 func LengthFieldPrepender(
 	byteOrder binary.ByteOrder,
 	lengthFieldLength int,

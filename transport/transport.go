@@ -34,8 +34,10 @@ import (
 //      数据包模式下: FrameCodec 需要指定为 PacketCodec -> [FrameCodec -> MessageCodec]
 //
 
+// Addr alias to net.Addr
 type Addr = net.Addr
 
+// Buffers to optimize message merging
 // 用于优化消息的发送
 // 1. 利用net.Buffers的接口实现Writev的系统调用优化
 // 2. 免除合并buffer时导致的多余内存分配和内存考虑消耗
@@ -52,12 +54,13 @@ type Buffers struct {
 	Indexes []int
 }
 
+// BuffersWriter defines writev for optimized syscall
 type BuffersWriter interface {
-	// writev for optimized syscall
+	// writev
 	Writev(buffs Buffers) (int64, error)
 }
 
-// transport
+// Transport defines a transport
 type Transport interface {
 	// read & write & close
 	io.ReadWriteCloser
@@ -78,11 +81,13 @@ type Transport interface {
 	RawTransport() interface{}
 }
 
+// Acceptor defines transport acceptor
 type Acceptor interface {
 	Accept() (Transport, error)
 	Close() error
 }
 
+// Factory defines transport factory
 type Factory interface {
 
 	// Supported schemes.
@@ -95,8 +100,10 @@ type Factory interface {
 	Listen(options *Options) (Acceptor, error)
 }
 
+// Schemes to define scheme list
 type Schemes []string
 
+// FixedURL to fix scheme
 func (ss Schemes) FixedURL(u *url.URL) error {
 	switch {
 	case "" == u.Scheme:
@@ -107,6 +114,7 @@ func (ss Schemes) FixedURL(u *url.URL) error {
 	return nil
 }
 
+// ValidURL to check url scheme
 func (ss Schemes) ValidURL(address string) bool {
 	u, err := url.Parse(address)
 	if nil != err {
@@ -115,10 +123,12 @@ func (ss Schemes) ValidURL(address string) bool {
 	return ss.Valid(u.Scheme)
 }
 
+// Valid scheme
 func (ss Schemes) Valid(scheme string) bool {
 	return -1 != ss.indexOf(scheme)
 }
 
+// Add scheme
 func (ss Schemes) Add(scheme string) Schemes {
 	if -1 != ss.indexOf(scheme) {
 		return ss
@@ -126,6 +136,7 @@ func (ss Schemes) Add(scheme string) Schemes {
 	return append(ss, scheme)
 }
 
+// find scheme
 func (ss Schemes) indexOf(scheme string) int {
 	for index, s := range ss {
 		if s == scheme {

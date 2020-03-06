@@ -25,6 +25,7 @@ import (
 	"github.com/go-netty/go-netty/utils"
 )
 
+// VariableLengthCodec create maximum received length codec
 func VariableLengthCodec(maxReadLength int) codec.Codec {
 	return &variableLengthCodec{maxReadLength: maxReadLength}
 }

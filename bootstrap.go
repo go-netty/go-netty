@@ -24,12 +24,12 @@ import (
 	"os/signal"
 )
 
-// Bootstrap
+// Bootstrap makes it easy to bootstrap a channel
 type Bootstrap interface {
 	Context() context.Context
 	WithContext(ctx context.Context) Bootstrap
 	ChannelExecutor(executorFactory ChannelExecutorFactory) Bootstrap
-	ChannelId(channelIdFactory ChannelIdFactory) Bootstrap
+	ChannelID(channelIDFactory ChannelIDFactory) Bootstrap
 	Pipeline(pipelineFactory PipelineFactory) Bootstrap
 	Channel(channelFactory ChannelFactory) Bootstrap
 	Transport(factory TransportFactory) Bootstrap
@@ -41,7 +41,7 @@ type Bootstrap interface {
 	Stop() Bootstrap
 }
 
-// Wait for signal.
+// WaitSignal for your signals
 func WaitSignal(signals ...os.Signal) func(Bootstrap) {
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, signals...)
@@ -55,60 +55,71 @@ func WaitSignal(signals ...os.Signal) func(Bootstrap) {
 	}
 }
 
-// Create a new Bootstrap.
+// NewBootstrap create a new Bootstrap with default config.
 func NewBootstrap() Bootstrap {
-	return new(bootstrap).WithContext(context.Background()).ChannelId(SequenceId()).Pipeline(NewPipeline()).Channel(NewChannel(128))
+	return new(bootstrap).WithContext(context.Background()).ChannelID(SequenceID()).Pipeline(NewPipeline()).Channel(NewChannel(128))
 }
 
+// bootstrap implement
 type bootstrap struct {
 	bootstrapOptions
 	acceptor transport.Acceptor
 }
 
+// WithContext fork child context with context.WithCancel
 func (b *bootstrap) WithContext(ctx context.Context) Bootstrap {
 	b.bootstrapCtx, b.bootstrapCancel = context.WithCancel(ctx)
 	return b
 }
 
+// Context to get context
 func (b *bootstrap) Context() context.Context {
 	return b.bootstrapCtx
 }
 
+// ChannelExecutor to set ChannelExecutorFactory
 func (b *bootstrap) ChannelExecutor(executor ChannelExecutorFactory) Bootstrap {
 	b.executorFactory = executor
 	return b
 }
 
-func (b *bootstrap) ChannelId(channelIdFactory ChannelIdFactory) Bootstrap {
-	b.channelIdFactory = channelIdFactory
+// ChannelID to set ChannelIDFactory
+func (b *bootstrap) ChannelID(channelIDFactory ChannelIDFactory) Bootstrap {
+	b.channelIDFactory = channelIDFactory
 	return b
 }
 
+// Pipeline to set PipelineFactory
 func (b *bootstrap) Pipeline(pipelineFactory PipelineFactory) Bootstrap {
 	b.pipelineFactory = pipelineFactory
 	return b
 }
 
+// Channel to set ChannelFactory
 func (b *bootstrap) Channel(channelFactory ChannelFactory) Bootstrap {
 	b.channelFactory = channelFactory
 	return b
 }
 
+// Transport to set TransportFactory
 func (b *bootstrap) Transport(factory TransportFactory) Bootstrap {
 	b.transportFactory = factory
 	return b
 }
 
+// ChildInitializer to set server side ChannelInitializer
 func (b *bootstrap) ChildInitializer(initializer ChannelInitializer) Bootstrap {
 	b.childInitializer = initializer
 	return b
 }
 
+// ClientInitializer to set client side ChannelInitializer
 func (b *bootstrap) ClientInitializer(initializer ChannelInitializer) Bootstrap {
 	b.clientInitializer = initializer
 	return b
 }
 
+// serveChannel to startup channel
 func (b *bootstrap) serveChannel(channelExecutor ChannelExecutor, channel Channel, childChannel bool) {
 
 	// initialization pipeline
@@ -118,19 +129,19 @@ func (b *bootstrap) serveChannel(channelExecutor ChannelExecutor, channel Channe
 		b.clientInitializer(channel)
 	}
 
-	// 需要插入Executor
+	// need insert executor handler
 	if channelExecutor != nil {
 
-		// 找到最后一个解码器的位置
+		// find the last codec handler position
 		position := channel.Pipeline().LastIndexOf(func(handler Handler) bool {
 			_, ok := handler.(CodecHandler)
 			return ok
 		})
 
-		// 必须要有Codec
+		// assert checker
 		utils.AssertIf(-1 == position, "missing codec.")
 
-		// 插入到解码器后面
+		// insert executor to pipeline at position
 		channel.Pipeline().AddHandler(position, channelExecutor)
 	}
 
@@ -138,18 +149,19 @@ func (b *bootstrap) serveChannel(channelExecutor ChannelExecutor, channel Channe
 	channel.Pipeline().serveChannel(channel)
 }
 
+// serveTransport to serve channel
 func (b *bootstrap) serveTransport(transport transport.Transport, attachment Attachment, childChannel bool) Channel {
 
-	// 创建一个流水线, 用于定义事件处理流程
+	// create a new pipeline
 	pipeline := b.pipelineFactory()
 
-	// 生成ChanelId
-	cid := b.channelIdFactory()
+	// generate a channel id
+	cid := b.channelIDFactory()
 
-	// 创建一个Channel用于读写数据
+	// create a channel
 	channel := b.channelFactory(cid, b.bootstrapCtx, pipeline, transport)
 
-	// 挂载附件
+	// set the attachment if necessary
 	if nil != attachment {
 		channel.SetAttachment(attachment)
 	}
@@ -160,35 +172,39 @@ func (b *bootstrap) serveTransport(transport transport.Transport, attachment Att
 		chExecutor = b.executorFactory(channel.Context())
 	}
 
+	// serve the channel
 	b.serveChannel(chExecutor, channel, childChannel)
 	return channel
 }
 
+// createListener to create a listener with options
 func (b *bootstrap) createListener(listenOptions ...transport.Option) error {
 
-	// 不需要创建
+	// no need to create
 	if len(listenOptions) <= 0 {
 		return nil
 	}
 
+	// parse options
 	options, err := transport.ParseOptions(listenOptions...)
 	if nil != err {
 		return err
 	}
 
-	// 监听服务
+	// create a listener with options
 	l, err := b.transportFactory.Listen(options)
 	if nil != err {
 		return err
 	}
 
-	// 关闭已有的监听器
+	// stop the old listener
 	b.stopListener()
 
 	b.acceptor = l
 	return nil
 }
 
+// startListener to accept child transport
 func (b *bootstrap) startListener() {
 
 	if nil == b.acceptor {
@@ -198,7 +214,7 @@ func (b *bootstrap) startListener() {
 	go func() {
 
 		for {
-			// 接受一个连接
+			// accept the transport
 			t, err := b.acceptor.Accept()
 			if nil != err {
 				break
@@ -206,17 +222,18 @@ func (b *bootstrap) startListener() {
 
 			select {
 			case <-b.Context().Done():
-				// 程序需要退出
+				// bootstrap has been closed
 				_ = t.Close()
 				return
 			default:
-				// 开始服务
+				// serve child transport
 				b.serveTransport(t, nil, true)
 			}
 		}
 	}()
 }
 
+// stopListener to close the listener
 func (b *bootstrap) stopListener() {
 	if b.acceptor != nil {
 		_ = b.acceptor.Close()
@@ -224,6 +241,7 @@ func (b *bootstrap) stopListener() {
 	}
 }
 
+// Connect to the remote server with options
 func (b *bootstrap) Connect(url string, attachment Attachment, option ...transport.Option) (Channel, error) {
 
 	transOptions := []transport.Option{
@@ -239,16 +257,17 @@ func (b *bootstrap) Connect(url string, attachment Attachment, option ...transpo
 		return nil, err
 	}
 
-	// 连接对端
+	// connect to remote endpoint
 	t, err := b.transportFactory.Connect(options)
 	if nil != err {
 		return nil, err
 	}
 
-	// 开始服务
+	// serve client transport
 	return b.serveTransport(t, attachment, false), nil
 }
 
+// Listen to the address with options
 func (b *bootstrap) Listen(url string, option ...transport.Option) Bootstrap {
 	listenOptions := []transport.Option{
 		// remote address
@@ -264,11 +283,13 @@ func (b *bootstrap) Listen(url string, option ...transport.Option) Bootstrap {
 	return b
 }
 
+// Action to call action function
 func (b *bootstrap) Action(action func(Bootstrap)) Bootstrap {
 	action(b)
 	return b
 }
 
+// Stop the bootstrap
 func (b *bootstrap) Stop() Bootstrap {
 	b.stopListener()
 	b.bootstrapCancel()

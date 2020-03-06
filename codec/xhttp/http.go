@@ -23,19 +23,17 @@ import (
 	"github.com/go-netty/go-netty/codec"
 )
 
-// http客户端编解码器
-// 发送请求 -> 解码回应
+// ClientCodec create a http client codec
 func ClientCodec() codec.Codec {
 	return codec.Combine("http-client-codec", new(responseCodec), new(requestCodec))
 }
 
-// http服务端编解码器
-// 读取请求 -> 写入回应
+// ServerCodec create a http server codec
 func ServerCodec() codec.Codec {
 	return codec.Combine("http-server-codec", new(requestCodec), new(responseCodec))
 }
 
-// 适配http标准Handler
+// Handler to convert http.Handler to codec.Codec
 func Handler(handler http.Handler) codec.Codec {
 	if nil == handler {
 		handler = http.DefaultServeMux
@@ -55,11 +53,11 @@ func (h *handlerAdapter) HandleRead(ctx netty.InboundContext, message netty.Mess
 
 	switch r := message.(type) {
 	case *http.Request:
-		// 准备ResponseWriter
+		// create a response writer
 		writer := NewResponseWriter(r.ProtoMajor, r.ProtoMinor)
-		// 回调处理器
+		// serve the http request
 		h.handler.ServeHTTP(writer, r)
-		// 写回响应
+		// write the response
 		ctx.Write(writer)
 	default:
 		ctx.HandleRead(message)

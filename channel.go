@@ -28,58 +28,59 @@ import (
 	"github.com/go-netty/go-netty/utils"
 )
 
-// Channel
+// Channel is defines a server-side-channel & client-side-channel
 type Channel interface {
-	// channel id.
-	Id() int64
+	// Channel id
+	ID() int64
 
 	// reader & writer & closer
 	io.WriteCloser
 
-	// write vector
+	// Writev to write [][]byte for optimize syscall
 	Writev([][]byte) (int64, error)
 
-	// local address.
+	// Local address
 	LocalAddr() string
 
-	// remote address.
+	// Remote address
 	RemoteAddr() string
 
-	// transport
+	// Transport
 	Transport() transport.Transport
 
-	// pipeline
+	// Pipeline
 	Pipeline() Pipeline
 
-	// get attachment.
+	// Get attachment
 	Attachment() Attachment
 
-	// set attachment.
+	// Set attachment
 	SetAttachment(Attachment)
 
-	// channel context.
+	// Channel context
 	Context() context.Context
 
-	// start read & write message routines.
+	// Start send & write routines.
 	serveChannel()
 }
 
-// NewChannel
+// NewChannel create a ChannelFactory
 func NewChannel(capacity int) ChannelFactory {
 	return func(id int64, ctx context.Context, pipeline Pipeline, transport transport.Transport) Channel {
-		return newChannelWith(id, ctx, pipeline, transport, capacity)
+		return newChannelWith(ctx, pipeline, transport, id, capacity)
 	}
 }
 
-// NewBufferedChannel
+// NewBufferedChannel create a ChannelFactory with buffered transport
 func NewBufferedChannel(capacity int, sizeRead int) ChannelFactory {
 	return func(id int64, ctx context.Context, pipeline Pipeline, tran transport.Transport) Channel {
 		tran = transport.BufferedTransport(tran, sizeRead)
-		return newChannelWith(id, ctx, pipeline, tran, capacity)
+		return newChannelWith(ctx, pipeline, tran, id, capacity)
 	}
 }
 
-func newChannelWith(id int64, ctx context.Context, pipeline Pipeline, transport transport.Transport, capacity int) Channel {
+// newChannelWith internal method for NewChannel & NewBufferedChannel
+func newChannelWith(ctx context.Context, pipeline Pipeline, transport transport.Transport, id int64, capacity int) Channel {
 	childCtx, cancel := context.WithCancel(ctx)
 	return &channel{
 		id:        id,
@@ -91,6 +92,7 @@ func newChannelWith(id int64, ctx context.Context, pipeline Pipeline, transport 
 	}
 }
 
+// implement of Channel
 type channel struct {
 	id             int64
 	ctx            context.Context
@@ -102,10 +104,12 @@ type channel struct {
 	closed, posted int32
 }
 
-func (c *channel) Id() int64 {
+// Get channel id
+func (c *channel) ID() int64 {
 	return c.id
 }
 
+// Write bytes to the channel
 func (c *channel) Write(p []byte) (n int, err error) {
 
 	select {
@@ -116,6 +120,7 @@ func (c *channel) Write(p []byte) (n int, err error) {
 	}
 }
 
+// Writev to write [][]byte for optimize syscall
 func (c *channel) Writev(p [][]byte) (n int64, err error) {
 
 	select {
@@ -129,6 +134,7 @@ func (c *channel) Writev(p [][]byte) (n int64, err error) {
 	}
 }
 
+// Close the channel
 func (c *channel) Close() error {
 	if atomic.CompareAndSwapInt32(&c.closed, 0, 1) {
 		c.cancel()
@@ -137,39 +143,48 @@ func (c *channel) Close() error {
 	return nil
 }
 
+// Get transport of channel
 func (c *channel) Transport() transport.Transport {
 	return c.transport
 }
 
+// Get pipeline of channel
 func (c *channel) Pipeline() Pipeline {
 	return c.pipeline
 }
 
+// Get local address of channel
 func (c *channel) LocalAddr() string {
 	return c.transport.LocalAddr().String()
 }
 
+// Get remote address of channel
 func (c *channel) RemoteAddr() string {
 	return c.transport.RemoteAddr().String()
 }
 
+// Get attachment of channel
 func (c *channel) Attachment() Attachment {
 	return c.attachment
 }
 
+// Set attachment of channel
 func (c *channel) SetAttachment(v Attachment) {
 	c.attachment = v
 }
 
+// Get context of channel
 func (c *channel) Context() context.Context {
 	return c.ctx
 }
 
+// start write & read routines
 func (c *channel) serveChannel() {
 	go c.writeLoop()
 	go c.readLoop()
 }
 
+// reading message of channel
 func (c *channel) readLoop() {
 
 	defer func() {
@@ -182,6 +197,7 @@ func (c *channel) readLoop() {
 	}
 }
 
+// sending message of channel
 func (c *channel) writeLoop() {
 
 	defer func() {
@@ -235,8 +251,8 @@ func (c *channel) writeLoop() {
 	}
 }
 
+// once post the exception
 func (c *channel) postCloseEvent(ex Exception) {
-	// 防止错误事件重复投递
 	if atomic.CompareAndSwapInt32(&c.posted, 0, 1) {
 		// 主动关闭的不需要触发异常流程
 		// 非主动关闭需要投递异常事件

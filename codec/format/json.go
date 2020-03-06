@@ -28,7 +28,8 @@ import (
 	"github.com/go-netty/go-netty/utils"
 )
 
-func JsonCodec(useNumber bool, disAllowUnknownFields bool) codec.Codec {
+// JSONCodec create a json codec
+func JSONCodec(useNumber bool, disAllowUnknownFields bool) codec.Codec {
 	return &jsonCodec{
 		useNumber:             useNumber,
 		disAllowUnknownFields: disAllowUnknownFields,

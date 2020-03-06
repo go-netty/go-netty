@@ -24,13 +24,20 @@ import (
 )
 
 type (
-	ChannelInitializer     func(Channel)
-	ChannelFactory         func(id int64, ctx context.Context, pipeline Pipeline, transport transport.Transport) Channel
-	PipelineFactory        func() Pipeline
-	TransportFactory       transport.Factory
-	ChannelIdFactory       func() int64
+	// ChannelInitializer to init the pipeline of channel
+	ChannelInitializer func(Channel)
+	// ChannelFactory to create a channel
+	ChannelFactory func(id int64, ctx context.Context, pipeline Pipeline, transport transport.Transport) Channel
+	// PipelineFactory to create pipeline
+	PipelineFactory func() Pipeline
+	// TransportFactory tp create transport
+	TransportFactory transport.Factory
+	// ChannelIDFactory to create channel id
+	ChannelIDFactory func() int64
+	// ChannelExecutorFactory to create executor
 	ChannelExecutorFactory func(ctx context.Context) ChannelExecutor
 
+	// bootstrapOptions
 	bootstrapOptions struct {
 		bootstrapCtx      context.Context
 		bootstrapCancel   context.CancelFunc
@@ -40,12 +47,12 @@ type (
 		channelFactory    ChannelFactory
 		pipelineFactory   PipelineFactory
 		executorFactory   ChannelExecutorFactory
-		channelIdFactory  ChannelIdFactory
+		channelIDFactory  ChannelIDFactory
 	}
 )
 
-// Sequence number generator
-func SequenceId() ChannelIdFactory {
+// SequenceID to generate a sequence id
+func SequenceID() ChannelIDFactory {
 	var id int64
 	return func() int64 {
 		return atomic.AddInt64(&id, 1)

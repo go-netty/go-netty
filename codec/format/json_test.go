@@ -56,16 +56,16 @@ func TestJsonCodec_HandleWrite(t *testing.T) {
 		},
 	}
 
-	jsonCodec1 := JsonCodec(true, false)
+	jsonCodec1 := JSONCodec(true, false)
 	jsonCodec1.HandleWrite(ctx, data)
 
-	jsonCodec2 := JsonCodec(false, false)
+	jsonCodec2 := JSONCodec(false, false)
 	jsonCodec2.HandleWrite(ctx, data)
 
-	jsonCodec3 := JsonCodec(true, true)
+	jsonCodec3 := JSONCodec(true, true)
 	jsonCodec3.HandleWrite(ctx, data)
 
-	jsonCodec4 := JsonCodec(false, true)
+	jsonCodec4 := JSONCodec(false, true)
 	jsonCodec4.HandleWrite(ctx, data)
 }
 
@@ -89,15 +89,15 @@ func TestJsonCodec_HandleRead(t *testing.T) {
 		},
 	}
 
-	jsonCodec1 := JsonCodec(true, false)
+	jsonCodec1 := JSONCodec(true, false)
 	jsonCodec1.HandleRead(ctx, data)
 
-	jsonCodec2 := JsonCodec(false, false)
+	jsonCodec2 := JSONCodec(false, false)
 	jsonCodec2.HandleRead(ctx, data)
 
-	jsonCodec3 := JsonCodec(true, true)
+	jsonCodec3 := JSONCodec(true, true)
 	jsonCodec3.HandleRead(ctx, data)
 
-	jsonCodec4 := JsonCodec(false, true)
+	jsonCodec4 := JSONCodec(false, true)
 	jsonCodec4.HandleRead(ctx, data)
 }

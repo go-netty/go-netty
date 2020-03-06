@@ -23,25 +23,26 @@ import (
 	"github.com/go-netty/go-netty/utils"
 )
 
-// ChannelExecutor
+// ChannelExecutor defines an executor
 type ChannelExecutor interface {
 	InboundHandler
 }
 
-// A fixed number of coroutines for event processing
+// NewFixedChannelExecutor create a fixed number of coroutines for event processing
 func NewFixedChannelExecutor(taskCap int, workerNum int) ChannelExecutorFactory {
-	return func(_ctx context.Context) ChannelExecutor {
-		return &channelExecutor{WorkerPool: utils.NewWorkerPool(taskCap, workerNum, workerNum, _ctx)}
+	return func(ctx context.Context) ChannelExecutor {
+		return &channelExecutor{WorkerPool: utils.NewWorkerPool(ctx, taskCap, workerNum, workerNum)}
 	}
 }
 
-// Flexible number of coroutine event processing, allowing setting maximum
+// NewFlexibleChannelExecutor create a flexible number of coroutine event processing, allowing setting maximum
 func NewFlexibleChannelExecutor(taskCap int, idleWorker, maxWorker int) ChannelExecutorFactory {
-	return func(_ctx context.Context) ChannelExecutor {
-		return &channelExecutor{WorkerPool: utils.NewWorkerPool(taskCap, idleWorker, maxWorker, _ctx)}
+	return func(ctx context.Context) ChannelExecutor {
+		return &channelExecutor{WorkerPool: utils.NewWorkerPool(ctx, taskCap, idleWorker, maxWorker)}
 	}
 }
 
+// channelExecutor impl ChannelExecutor
 type channelExecutor struct {
 	utils.WorkerPool
 }

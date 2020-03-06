@@ -23,7 +23,7 @@ import (
 	"github.com/go-netty/go-netty/utils"
 )
 
-// Message processing pipeline
+// Pipeline defines a message processing pipeline.
 type Pipeline interface {
 
 	// add a handler to the first.
@@ -62,12 +62,12 @@ type Pipeline interface {
 	fireChannelEvent(event Event)
 }
 
-// Convert to PipelineFactory
+// NewPipeline convert to PipelineFactory
 func NewPipeline() PipelineFactory {
 	return NewPipelineWith
 }
 
-// Create a new pipeline.
+// NewPipelineWith create a pipeline.
 func NewPipelineWith() Pipeline {
 
 	p := &pipeline{}
@@ -90,6 +90,7 @@ func NewPipelineWith() Pipeline {
 	return p
 }
 
+// pipeline to implement Pipeline
 type pipeline struct {
 	head    *handlerContext
 	tail    *handlerContext
@@ -97,6 +98,7 @@ type pipeline struct {
 	size    int
 }
 
+// AddFirst to add handlers at head
 func (p *pipeline) AddFirst(handlers ...Handler) Pipeline {
 	for _, h := range handlers {
 		p.addFirst(h)
@@ -104,6 +106,7 @@ func (p *pipeline) AddFirst(handlers ...Handler) Pipeline {
 	return p
 }
 
+// AddLast to add handlers at tail
 func (p *pipeline) AddLast(handlers ...Handler) Pipeline {
 	for _, h := range handlers {
 		p.addLast(h)
@@ -111,7 +114,7 @@ func (p *pipeline) AddLast(handlers ...Handler) Pipeline {
 	return p
 }
 
-// add handlers in position.
+// AddHandler to insert handlers in position
 func (p *pipeline) AddHandler(position int, handlers ...Handler) Pipeline {
 
 	// checking handler.
@@ -146,7 +149,7 @@ func (p *pipeline) AddHandler(position int, handlers ...Handler) Pipeline {
 	return p
 }
 
-// find fist index of handler.
+// IndexOf to find fist index of handler.
 func (p *pipeline) IndexOf(comp func(Handler) bool) int {
 
 	head := p.head
@@ -163,7 +166,7 @@ func (p *pipeline) IndexOf(comp func(Handler) bool) int {
 	return -1
 }
 
-// find last index of handler.
+// LastIndexOf to find last index of handler.
 func (p *pipeline) LastIndexOf(comp func(Handler) bool) int {
 
 	tail := p.tail
@@ -180,6 +183,7 @@ func (p *pipeline) LastIndexOf(comp func(Handler) bool) int {
 	return -1
 }
 
+// ContextAt to access the context by position
 func (p *pipeline) ContextAt(position int) HandlerContext {
 
 	if -1 == position || position >= p.size {
@@ -194,11 +198,12 @@ func (p *pipeline) ContextAt(position int) HandlerContext {
 	return curNode
 }
 
-// size of handler
+// Size of handlers
 func (p *pipeline) Size() int {
 	return p.size
 }
 
+// addFirst to add handlers head
 func (p *pipeline) addFirst(handler Handler) {
 
 	// checking handler.
@@ -216,6 +221,7 @@ func (p *pipeline) addFirst(handler Handler) {
 	p.size++
 }
 
+// addLast to add handlers tail
 func (p *pipeline) addLast(handler Handler) {
 
 	// checking handler.
@@ -233,10 +239,12 @@ func (p *pipeline) addLast(handler Handler) {
 	p.size++
 }
 
+// Channel to get channel of Pipeline
 func (p *pipeline) Channel() Channel {
 	return p.channel
 }
 
+// serveChannel to serve the channel
 func (p *pipeline) serveChannel(channel Channel) {
 
 	utils.AssertIf(nil != p.channel, "already attached channel")
@@ -252,30 +260,37 @@ func (p *pipeline) serveChannel(channel Channel) {
 	p.channel.serveChannel()
 }
 
+// fireChannelActive
 func (p *pipeline) fireChannelActive() {
 	p.head.HandleActive()
 }
 
+// fireChannelRead
 func (p *pipeline) fireChannelRead(message Message) {
 	p.head.HandleRead(message)
 }
 
+// fireChannelWrite
 func (p *pipeline) fireChannelWrite(message Message) {
 	p.tail.HandleWrite(message)
 }
 
+// fireChannelException
 func (p *pipeline) fireChannelException(ex Exception) {
 	p.head.HandleException(ex)
 }
 
+// fireChannelInactive
 func (p *pipeline) fireChannelInactive(ex Exception) {
 	p.tail.HandleInactive(ex)
 }
 
+// fireChannelEvent
 func (p *pipeline) fireChannelEvent(event Event) {
 	p.head.HandleEvent(event)
 }
 
+// checkHandler to checking handlers
 func checkHandler(handlers ...Handler) {
 
 	for _, h := range handlers {

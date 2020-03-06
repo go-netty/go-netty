@@ -23,6 +23,7 @@ import (
 	"github.com/go-netty/go-netty/transport"
 )
 
+// New tcp factory
 func New() transport.Factory {
 	return new(tcpFactory)
 }

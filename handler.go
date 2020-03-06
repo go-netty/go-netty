@@ -28,20 +28,23 @@ import (
 )
 
 type (
+	// Message defines an any message
+	//
 	// Represent different objects in different processing steps,
 	// in most cases the message type handled by the codec is mainly io.Reader / []byte,
 	// in the user handler should have been converted to a protocol object.
 	Message interface {
 	}
 
-	// User-defined event types, read-write timeout events, etc.
+	// Event defines user-defined event types, read-write timeout events, etc
 	Event interface {
 	}
 
-	// The object or data associated with the Channel.
+	// Attachment defines the object or data associated with the Channel
 	Attachment interface {
 	}
 
+	// Handler defines an any handler
 	// At least one or more of the following types should be implemented
 	// ActiveHandler
 	// InboundHandler
@@ -52,45 +55,45 @@ type (
 	Handler interface {
 	}
 
-	// Active event handler.
+	// ActiveHandler defines an active handler
 	ActiveHandler interface {
 		HandleActive(ctx ActiveContext)
 	}
 
-	// Inbound event handler.
+	// InboundHandler defines an Inbound handler
 	InboundHandler interface {
 		HandleRead(ctx InboundContext, message Message)
 	}
 
-	// Outbound event handler.
+	// OutboundHandler defines an outbound handler
 	OutboundHandler interface {
 		HandleWrite(ctx OutboundContext, message Message)
 	}
 
-	// Exception event handler.
+	// ExceptionHandler defines an exception handler
 	ExceptionHandler interface {
 		HandleException(ctx ExceptionContext, ex Exception)
 	}
 
-	// Inactivation event handler.
+	// InactiveHandler defines an inactive handler
 	InactiveHandler interface {
 		HandleInactive(ctx InactiveContext, ex Exception)
 	}
 
-	// User-defined event handler.
+	// EventHandler defines an event handler
 	EventHandler interface {
 		HandleEvent(ctx EventContext, event Event)
 	}
 )
 
-// CodecHandler
+// CodecHandler defines an codec handler
 type CodecHandler interface {
 	CodecName() string
 	InboundHandler
 	OutboundHandler
 }
 
-// ChannelHandler
+// ChannelHandler defines a channel handler
 type ChannelHandler interface {
 	ActiveHandler
 	InboundHandler
@@ -99,54 +102,60 @@ type ChannelHandler interface {
 	InactiveHandler
 }
 
-// ChannelInboundHandler
+// ChannelInboundHandler defines a channel inbound handler
 type ChannelInboundHandler interface {
 	ActiveHandler
 	InboundHandler
 	InactiveHandler
 }
 
-// ChannelOutboundHandler
+// ChannelOutboundHandler defines a channel outbound handler
 type ChannelOutboundHandler interface {
 	ActiveHandler
 	OutboundHandler
 	InactiveHandler
 }
 
-// SimpleChannelHandler
+// SimpleChannelHandler defines ChannelInboundHandler alias
 type SimpleChannelHandler = ChannelInboundHandler
 
-// func for ActiveHandler
+// ActiveHandlerFunc impl ActiveHandler
 type ActiveHandlerFunc func(ctx ActiveContext)
 
+// HandleActive to impl ActiveHandler
 func (fn ActiveHandlerFunc) HandleActive(ctx ActiveContext) { fn(ctx) }
 
-// func for InboundHandler
+// InboundHandlerFunc impl InboundHandler
 type InboundHandlerFunc func(ctx InboundContext, message Message)
 
+// HandleRead to impl InboundHandler
 func (fn InboundHandlerFunc) HandleRead(ctx InboundContext, message Message) { fn(ctx, message) }
 
-// func for OutboundHandler
+// OutboundHandlerFunc impl OutboundHandler
 type OutboundHandlerFunc func(ctx OutboundContext, message Message)
 
+// HandleWrite to impl OutboundHandler
 func (fn OutboundHandlerFunc) HandleWrite(ctx OutboundContext, message Message) { fn(ctx, message) }
 
-// func for ExceptionHandler
+// ExceptionHandlerFunc impl ExceptionHandler
 type ExceptionHandlerFunc func(ctx ExceptionContext, ex Exception)
 
+// HandleException to impl ExceptionHandler
 func (fn ExceptionHandlerFunc) HandleException(ctx ExceptionContext, ex Exception) { fn(ctx, ex) }
 
-// func for InactiveHandler
+// InactiveHandlerFunc impl InactiveHandler
 type InactiveHandlerFunc func(ctx InactiveContext, ex Exception)
 
+// HandleInactive to impl InactiveHandler
 func (fn InactiveHandlerFunc) HandleInactive(ctx InactiveContext, ex Exception) { fn(ctx, ex) }
 
-// func for EventHandler
+// EventHandlerFunc impl EventHandler
 type EventHandlerFunc func(ctx EventContext, event Event)
 
+// HandleEvent to impl EventHandler
 func (fn EventHandlerFunc) HandleEvent(ctx EventContext, event Event) { fn(ctx, event) }
 
-// default: headHandler.
+// headHandler
 type headHandler struct{}
 
 func (*headHandler) HandleActive(ctx ActiveContext) {
@@ -199,14 +208,14 @@ func (*tailHandler) HandleWrite(ctx OutboundContext, message Message) {
 }
 
 type (
-	// reading idle events
+	// ReadIdleEvent define a ReadIdleEvent
 	ReadIdleEvent struct{}
 
-	// write idle event
+	// WriteIdleEvent define a WriteIdleEvent
 	WriteIdleEvent struct{}
 )
 
-// ReadIdleHandler
+// ReadIdleHandler fire ReadIdleEvent after waiting for a reading timeout
 func ReadIdleHandler(idleTime time.Duration) ChannelInboundHandler {
 	utils.AssertIf(idleTime < time.Second, "idleTime must be greater than one second")
 	return &readIdleHandler{
@@ -214,7 +223,7 @@ func ReadIdleHandler(idleTime time.Duration) ChannelInboundHandler {
 	}
 }
 
-// WriteIdleHandler
+// WriteIdleHandler fire WriteIdleEvent after waiting for a sending timeout
 func WriteIdleHandler(idleTime time.Duration) ChannelOutboundHandler {
 	utils.AssertIf(idleTime < time.Second, "idleTime must be greater than one second")
 	return &writeIdleHandler{
@@ -310,7 +319,7 @@ func (w *writeIdleHandler) HandleActive(ctx ActiveContext) {
 func (w *writeIdleHandler) HandleWrite(ctx OutboundContext, message Message) {
 	// update last write time.
 	w.lastWriteTime.Store(time.Now())
-	// post the write event.
+	// post write event.
 	ctx.HandleWrite(message)
 }
 
