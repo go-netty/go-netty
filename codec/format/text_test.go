@@ -17,76 +17,40 @@
 package format
 
 import (
-	"io"
-	"io/ioutil"
+	"bytes"
+	"fmt"
+	"github.com/go-netty/go-netty"
+	"github.com/go-netty/go-netty/utils"
 	"strings"
 	"testing"
-
-	"github.com/go-netty/go-netty"
 )
 
-func TestTextCodec_HandleWrite(t *testing.T) {
+func TestTextCodec(t *testing.T) {
 
-	const text = "Hello go-netty!!!"
-
-	ctx := netty.MockOutboundContext{
-		MockHandleWrite: func(message netty.Message) {
-			switch m := message.(type) {
-			case string:
-				if m != text {
-					t.Fatal(m, "!=", text)
-				}
-			case []byte:
-				if ds := string(m); ds != text {
-					t.Fatal(ds, "!=", text)
-				}
-			case io.Reader:
-				dst, err := ioutil.ReadAll(m)
-				if nil != err {
-					t.Fatal(err)
-				}
-				if ds := string(dst); ds != text {
-					t.Fatal(ds, "!=", text)
-				}
-			default:
-				t.Fatal("wrong type", message)
-			}
-		},
+	var cases = []struct {
+		input  []byte
+		output interface{}
+	}{
+		{output: "123456789"},
+		{output: strings.NewReader("123456789")},
 	}
 
-	textCodec := TextCodec()
-	textCodec.HandleWrite(ctx, text)
-	textCodec.HandleWrite(ctx, []byte(text))
-	textCodec.HandleWrite(ctx, strings.NewReader(text))
-}
+	for index, c := range cases {
+		codec := TextCodec()
+		t.Run(fmt.Sprint(codec.CodecName(), "#", index), func(t *testing.T) {
+			ctx := netty.MockHandlerContext{
+				MockHandleRead: func(message netty.Message) {
+					if dst := utils.MustToBytes(message); !bytes.Equal(dst, c.input) {
+						t.Fatalf("%v != %v", dst, c.input)
+					}
+				},
 
-func TestTextCodec_HandleRead(t *testing.T) {
-
-	const text = "Hello go-netty!!!"
-
-	ctx := netty.MockInboundContext{
-		MockHandleRead: func(message netty.Message) {
-			switch m := message.(type) {
-			case string:
-				if m != text {
-					t.Fatal(m, "!=", text)
-				}
-			case io.Reader:
-				dst, err := ioutil.ReadAll(m)
-				if nil != err {
-					t.Fatal(err)
-				}
-				if ds := string(dst); ds != text {
-					t.Fatal(ds, "!=", text)
-				}
-			default:
-				t.Fatal("wrong type", message)
+				MockHandleWrite: func(message netty.Message) {
+					c.input = utils.MustToBytes(message)
+				},
 			}
-		},
+			codec.HandleWrite(ctx, c.output)
+			codec.HandleRead(ctx, c.input)
+		})
 	}
-
-	textCodec := TextCodec()
-	textCodec.HandleRead(ctx, text)
-	textCodec.HandleRead(ctx, []byte(text))
-	textCodec.HandleRead(ctx, strings.NewReader(text))
 }

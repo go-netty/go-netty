@@ -19,65 +19,51 @@ package frame
 import (
 	"bytes"
 	"encoding/binary"
-	"io"
-	"io/ioutil"
+	"github.com/go-netty/go-netty/utils"
 	"testing"
 
 	"github.com/go-netty/go-netty"
 )
 
-func TestLengthFieldCodec_HandleWrite(t *testing.T) {
+func TestLengthFieldCodec(t *testing.T) {
 
-	var text = []byte("Hello go-netty")
+	var cases = []struct {
+		byteOrder        binary.ByteOrder
+		maxFrameLen      int
+		fieldOffset      int
+		fieldLen         int
+		lengthAdjustment int
+		bytesToStrip     int
+		input            []byte
+		output           interface{}
+	}{
+		{byteOrder: binary.LittleEndian, maxFrameLen: 1024, fieldLen: 1, lengthAdjustment: 0, bytesToStrip: 1, output: []byte("123456789")},
+		{byteOrder: binary.LittleEndian, maxFrameLen: 1024, fieldLen: 2, lengthAdjustment: 0, bytesToStrip: 2, output: []byte("123456789")},
+		{byteOrder: binary.LittleEndian, maxFrameLen: 1024, fieldLen: 4, lengthAdjustment: 0, bytesToStrip: 4, output: []byte("123456789")},
+		{byteOrder: binary.LittleEndian, maxFrameLen: 1024, fieldLen: 8, lengthAdjustment: 0, bytesToStrip: 8, output: []byte("123456789")},
 
-	ctx := netty.MockOutboundContext{
-		MockHandleWrite: func(message netty.Message) {
-
-			switch m := message.(type) {
-			case [][]byte:
-
-				n := binary.LittleEndian.Uint16(m[0])
-				if int(n) != len(text) {
-					t.Fatal(n, "!=", len(text))
-				}
-
-				if !bytes.Equal(m[1], text) {
-					t.Fatal(m[1], "!=", text)
-				}
-
-			default:
-				t.Fatal("wrong type", message)
-			}
-		},
+		{byteOrder: binary.BigEndian, maxFrameLen: 1024, fieldLen: 1, lengthAdjustment: 0, bytesToStrip: 1, output: []byte("123456789")},
+		{byteOrder: binary.BigEndian, maxFrameLen: 1024, fieldLen: 2, lengthAdjustment: 0, bytesToStrip: 2, output: []byte("123456789")},
+		{byteOrder: binary.BigEndian, maxFrameLen: 1024, fieldLen: 4, lengthAdjustment: 0, bytesToStrip: 4, output: []byte("123456789")},
+		{byteOrder: binary.BigEndian, maxFrameLen: 1024, fieldLen: 8, lengthAdjustment: 0, bytesToStrip: 8, output: []byte("123456789")},
 	}
 
-	lengthFieldCodec := LengthFieldCodec(binary.LittleEndian, 1024, 0, 2, 0, 2)
-	lengthFieldCodec.HandleWrite(ctx, text)
-	lengthFieldCodec.HandleWrite(ctx, bytes.NewReader(text))
-}
+	for _, c := range cases {
+		codec := LengthFieldCodec(c.byteOrder, c.maxFrameLen, c.fieldOffset, c.fieldLen, c.lengthAdjustment, c.bytesToStrip)
+		t.Run(codec.CodecName(), func(t *testing.T) {
+			ctx := netty.MockHandlerContext{
+				MockHandleRead: func(message netty.Message) {
+					if dst := utils.MustToBytes(message); !bytes.Equal(dst, c.input[c.bytesToStrip:]) {
+						t.Fatalf("%v != %v", dst, c.input[c.bytesToStrip:])
+					}
+				},
 
-func TestLengthFieldCodec_HandleRead(t *testing.T) {
-
-	var text = []byte("Hello go-netty")
-	var lengthBuff [2]byte
-	binary.LittleEndian.PutUint16(lengthBuff[:], uint16(len(text)))
-
-	var packet = append(append([]byte{}, lengthBuff[:]...), text...)
-
-	ctx := netty.MockInboundContext{
-		MockHandleRead: func(message netty.Message) {
-
-			data, err := ioutil.ReadAll(message.(io.Reader))
-			if nil != err {
-				t.Fatal(err)
+				MockHandleWrite: func(message netty.Message) {
+					c.input = utils.MustToBytes(message)
+				},
 			}
-
-			if !bytes.Equal(data, text) {
-				t.Fatal(data, "!=", text)
-			}
-		},
+			codec.HandleWrite(ctx, c.output)
+			codec.HandleRead(ctx, c.input)
+		})
 	}
-
-	lengthFieldCodec := LengthFieldCodec(binary.LittleEndian, 1024, 0, 2, 0, 2)
-	lengthFieldCodec.HandleRead(ctx, bytes.NewReader(packet))
 }

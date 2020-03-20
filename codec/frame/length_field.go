@@ -51,7 +51,7 @@ func LengthFieldCodec(
 		lengthFieldLength:   lengthFieldLength,
 		lengthAdjustment:    lengthAdjustment,
 		initialBytesToStrip: initialBytesToStrip,
-		prepender:           LengthFieldPrepender(byteOrder, lengthFieldLength, 0, false),
+		OutboundHandler:     LengthFieldPrepender(byteOrder, lengthFieldLength, 0, false),
 	}
 }
 
@@ -64,7 +64,7 @@ type lengthFieldCodec struct {
 	initialBytesToStrip int
 
 	// default encoder
-	prepender netty.OutboundHandler
+	netty.OutboundHandler
 }
 
 func (*lengthFieldCodec) CodecName() string {
@@ -73,65 +73,79 @@ func (*lengthFieldCodec) CodecName() string {
 
 func (l *lengthFieldCodec) HandleRead(ctx netty.InboundContext, message netty.Message) {
 
-	switch r := message.(type) {
-	case io.Reader:
+	// unwrap to reader
+	reader := utils.MustToReader(message)
 
-		lengthFieldEndOffset := l.lengthFieldOffset + l.lengthFieldLength
+	// lengthFieldEndOffset
+	lengthFieldEndOffset := l.lengthFieldOffset + l.lengthFieldLength
 
-		headerBuffer := make([]byte, lengthFieldEndOffset)
-		n, err := io.ReadFull(r, headerBuffer)
+	headerBuffer := make([]byte, lengthFieldEndOffset)
+	n, err := io.ReadFull(reader, headerBuffer)
 
-		utils.AssertIf(n != len(headerBuffer) || nil != err, "read header fail, headerLength: %d, read: %d, error: %v", len(headerBuffer), n, err)
+	utils.AssertIf(n != len(headerBuffer) || nil != err, "read header fail, headerLength: %d, read: %d, error: %v", len(headerBuffer), n, err)
 
-		lengthFieldBuff := headerBuffer[l.lengthFieldOffset:lengthFieldEndOffset]
+	lengthFieldBuff := headerBuffer[l.lengthFieldOffset:lengthFieldEndOffset]
 
-		var frameLength int64
-		switch l.lengthFieldLength {
-		case 1:
-			frameLength = int64(lengthFieldBuff[0])
-		case 2:
-			frameLength = int64(l.byteOrder.Uint16(lengthFieldBuff))
-		case 4:
-			frameLength = int64(l.byteOrder.Uint32(lengthFieldBuff))
-		case 8:
-			frameLength = int64(l.byteOrder.Uint64(lengthFieldBuff))
-		default:
-			utils.Assert(fmt.Errorf("should not reach here"))
-		}
+	frameLength := unpackFieldLength(l.byteOrder, l.lengthFieldLength, lengthFieldBuff)
 
-		utils.AssertIf(frameLength < 0, "negative pre-adjustment length field: %d", frameLength)
+	utils.AssertIf(frameLength < 0, "negative pre-adjustment length field: %d", frameLength)
 
-		frameLength += int64(l.lengthAdjustment + lengthFieldEndOffset)
+	frameLength += int64(l.lengthAdjustment + lengthFieldEndOffset)
 
-		utils.AssertIf(frameLength < int64(lengthFieldEndOffset),
-			"Adjusted frame length (%d) is less than lengthFieldEndOffset: %d", frameLength, lengthFieldEndOffset)
+	utils.AssertIf(frameLength < int64(lengthFieldEndOffset),
+		"Adjusted frame length (%d) is less than lengthFieldEndOffset: %d", frameLength, lengthFieldEndOffset)
 
-		utils.AssertIf(frameLength > int64(l.maxFrameLength),
-			"Frame length too large, frameLength(%d) > maxFrameLength(%d)", frameLength, l.maxFrameLength)
+	utils.AssertIf(frameLength > int64(l.maxFrameLength),
+		"Frame length too large, frameLength(%d) > maxFrameLength(%d)", frameLength, l.maxFrameLength)
 
-		utils.AssertIf(int64(l.initialBytesToStrip) > frameLength,
-			"Adjusted frame length (%d) is less than initialBytesToStrip: %d", frameLength, l.initialBytesToStrip)
+	utils.AssertIf(int64(l.initialBytesToStrip) > frameLength,
+		"Adjusted frame length (%d) is less than initialBytesToStrip: %d", frameLength, l.initialBytesToStrip)
 
-		frameReader := io.MultiReader(
-			// lengthFieldOffset + lengthFieldLength
-			bytes.NewReader(headerBuffer),
-			// frameLength - len(headerBuffer)
-			io.LimitReader(r, frameLength-int64(lengthFieldEndOffset)),
-		)
+	frameReader := io.MultiReader(
+		// lengthFieldOffset + lengthFieldLength
+		bytes.NewReader(headerBuffer),
+		// frameLength - len(headerBuffer)
+		io.LimitReader(reader, frameLength-int64(lengthFieldEndOffset)),
+	)
 
-		// strip bytes
-		if l.initialBytesToStrip > 0 {
-			n, err := io.CopyN(ioutil.Discard, frameReader, int64(l.initialBytesToStrip))
-			utils.AssertIf(nil != err || int64(l.initialBytesToStrip) != n, "initialBytesToStrip: %d -> %d, %v", l.initialBytesToStrip, n, err)
-		}
-
-		ctx.HandleRead(frameReader)
-
-	default:
-		utils.Assert(fmt.Errorf("unrecognized type: %T", message))
+	// strip bytes
+	if l.initialBytesToStrip > 0 {
+		n, err := io.CopyN(ioutil.Discard, frameReader, int64(l.initialBytesToStrip))
+		utils.AssertIf(nil != err || int64(l.initialBytesToStrip) != n, "initialBytesToStrip: %d -> %d, %v", l.initialBytesToStrip, n, err)
 	}
+
+	ctx.HandleRead(frameReader)
 }
 
-func (l *lengthFieldCodec) HandleWrite(ctx netty.OutboundContext, message netty.Message) {
-	l.prepender.HandleWrite(ctx, message)
+func unpackFieldLength(byteOrder binary.ByteOrder, fieldLen int, buff []byte) (frameLength int64) {
+	switch fieldLen {
+	case 1:
+		frameLength = int64(buff[0])
+	case 2:
+		frameLength = int64(byteOrder.Uint16(buff))
+	case 4:
+		frameLength = int64(byteOrder.Uint32(buff))
+	case 8:
+		frameLength = int64(byteOrder.Uint64(buff))
+	default:
+		utils.Assert(fmt.Errorf("should not reach here"))
+	}
+	return
+}
+
+func packFieldLength(byteOrder binary.ByteOrder, fieldLen int, dataLen int64) []byte {
+	lengthBuff := make([]byte, fieldLen)
+	switch fieldLen {
+	case 1:
+		lengthBuff[0] = byte(dataLen)
+	case 2:
+		byteOrder.PutUint16(lengthBuff, uint16(dataLen))
+	case 4:
+		byteOrder.PutUint32(lengthBuff, uint32(dataLen))
+	case 8:
+		byteOrder.PutUint64(lengthBuff, uint64(dataLen))
+	default:
+		utils.Assert(fmt.Errorf("should not reach here"))
+	}
+	return lengthBuff
 }

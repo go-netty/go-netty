@@ -19,74 +19,42 @@ package frame
 import (
 	"bytes"
 	"encoding/binary"
-	"io"
-	"io/ioutil"
-	"testing"
-
+	"fmt"
 	"github.com/go-netty/go-netty"
+	"github.com/go-netty/go-netty/utils"
+	"strings"
+	"testing"
 )
 
-func TestVarintLengthFieldCodec_HandleWrite(t *testing.T) {
+func TestVarintLengthFieldCodec(t *testing.T) {
 
-	var text = []byte("Hello go-netty")
-	var head = [binary.MaxVarintLen64]byte{}
-	n := binary.PutUvarint(head[:], uint64(len(text)))
-	headBuff := head[:n]
-
-	ctx := netty.MockOutboundContext{
-		MockHandleWrite: func(message netty.Message) {
-
-			switch m := message.(type) {
-			case [][]byte:
-
-				if !bytes.Equal(m[0], headBuff) {
-					t.Fatal(m[0], "!=", headBuff)
-				}
-
-				if !bytes.Equal(m[1], text) {
-					t.Fatal(m[1], "!=", text)
-				}
-			default:
-				t.Fatal("wrong type", message)
-			}
-		},
+	var cases = []struct {
+		maxFrameLen int
+		input       []byte
+		output      interface{}
+		offset      int
+	}{
+		{maxFrameLen: 1024, output: "123456789"},
+		{maxFrameLen: 1024, output: strings.NewReader("123456789")},
 	}
 
-	varintCodec := VarintLengthFieldCodec(1024)
-	varintCodec.HandleWrite(ctx, text)
-	varintCodec.HandleWrite(ctx, bytes.NewReader(text))
-}
+	for index, c := range cases {
+		codec := VarintLengthFieldCodec(c.maxFrameLen)
+		t.Run(fmt.Sprint(codec.CodecName(), "#", index), func(t *testing.T) {
+			ctx := netty.MockHandlerContext{
+				MockHandleRead: func(message netty.Message) {
+					if dst := utils.MustToBytes(message); !bytes.Equal(dst, c.input[c.offset:]) {
+						t.Fatalf("%v != %v", dst, c.input[c.offset:])
+					}
+				},
 
-func TestVarintLengthFieldCodec_HandleRead(t *testing.T) {
-
-	var text = []byte("Hello go-netty")
-	var head = [binary.MaxVarintLen64]byte{}
-	n := binary.PutUvarint(head[:], uint64(len(text)))
-
-	packet := append(append([]byte{}, head[:n]...), text...)
-
-	ctx := netty.MockInboundContext{
-		MockHandleRead: func(message netty.Message) {
-
-			var data []byte
-
-			switch m := message.(type) {
-			case io.Reader:
-				var err error
-				if data, err = ioutil.ReadAll(m); nil != err {
-					t.Fatal(err)
-				}
-			default:
-				t.Fatal("wrong type", message)
+				MockHandleWrite: func(message netty.Message) {
+					c.input = utils.MustToBytes(message)
+					_, c.offset = binary.Uvarint(c.input)
+				},
 			}
-
-			if !bytes.Equal(data, text) {
-				t.Fatal(data, "!=", text)
-			}
-		},
+			codec.HandleWrite(ctx, c.output)
+			codec.HandleRead(ctx, c.input)
+		})
 	}
-
-	varintCodec := VarintLengthFieldCodec(1024)
-	varintCodec.HandleRead(ctx, packet)
-	varintCodec.HandleRead(ctx, bytes.NewReader(packet))
 }

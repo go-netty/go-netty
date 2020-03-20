@@ -19,7 +19,7 @@ package xhttp
 import (
 	"bufio"
 	"bytes"
-	"io"
+	"fmt"
 	"net/http"
 
 	"github.com/go-netty/go-netty"
@@ -35,18 +35,15 @@ func (*responseCodec) CodecName() string {
 
 func (*responseCodec) HandleRead(ctx netty.InboundContext, message netty.Message) {
 
-	switch r := message.(type) {
-	case io.Reader:
-		response, err := http.ReadResponse(bufio.NewReader(r), nil)
-		utils.Assert(err)
-		ctx.HandleRead(response)
+	reader := utils.MustToReader(message)
 
-		// auto close the response body.
-		if response.Body != nil {
-			_ = response.Body.Close()
-		}
-	default:
-		ctx.HandleRead(message)
+	response, err := http.ReadResponse(bufio.NewReader(reader), nil)
+	utils.Assert(err)
+	ctx.HandleRead(response)
+
+	// auto close the response body.
+	if response.Body != nil {
+		_ = response.Body.Close()
 	}
 }
 
@@ -63,6 +60,6 @@ func (*responseCodec) HandleWrite(ctx netty.OutboundContext, message netty.Messa
 		utils.Assert(response.Write(buffer))
 		ctx.HandleWrite(buffer)
 	default:
-		ctx.HandleWrite(message)
+		utils.Assert(fmt.Errorf("unrecognized type: %T", message))
 	}
 }

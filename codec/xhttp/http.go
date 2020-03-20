@@ -17,6 +17,8 @@
 package xhttp
 
 import (
+	"fmt"
+	"github.com/go-netty/go-netty/utils"
 	"net/http"
 
 	"github.com/go-netty/go-netty"
@@ -60,7 +62,7 @@ func (h *handlerAdapter) HandleRead(ctx netty.InboundContext, message netty.Mess
 		// write the response
 		ctx.Write(writer)
 	default:
-		ctx.HandleRead(message)
+		utils.Assert(fmt.Errorf("unrecognized type: %T", message))
 	}
 }
 

@@ -17,15 +17,11 @@
 package frame
 
 import (
-	"bytes"
 	"encoding/binary"
-	"fmt"
-	"io"
-	"io/ioutil"
-
 	"github.com/go-netty/go-netty"
 	"github.com/go-netty/go-netty/codec"
 	"github.com/go-netty/go-netty/utils"
+	"io"
 )
 
 // VarintLengthFieldCodec create varint length field based codec
@@ -46,38 +42,19 @@ func (v *varintLengthFieldCodec) CodecName() string {
 
 func (v *varintLengthFieldCodec) HandleRead(ctx netty.InboundContext, message netty.Message) {
 
-	switch r := message.(type) {
-	case io.Reader:
-		frameLength, err := binary.ReadUvarint(utils.NewByteReader(r))
-		utils.Assert(err)
-		utils.AssertIf(frameLength > uint64(v.maxFrameLength),
-			"frame length too large, frameLength(%d) > maxFrameLength(%d)", frameLength, v.maxFrameLength)
+	reader := utils.MustToReader(message)
 
-		ctx.HandleRead(io.LimitReader(r, int64(frameLength)))
-	case []byte:
-		frameLength, n := binary.Uvarint(r)
-		utils.AssertIf(frameLength > uint64(v.maxFrameLength),
-			"frame length too large, frameLength(%d) > maxFrameLength(%d)", frameLength, v.maxFrameLength)
-		utils.AssertIf(int(frameLength) != len(r)-n, "incomplete packet")
+	frameLength, err := binary.ReadUvarint(utils.NewByteReader(reader))
+	utils.Assert(err)
+	utils.AssertIf(frameLength > uint64(v.maxFrameLength),
+		"frame length too large, frameLength(%d) > maxFrameLength(%d)", frameLength, v.maxFrameLength)
 
-		ctx.HandleRead(bytes.NewReader(r[n:]))
-	default:
-		utils.Assert(fmt.Errorf("unrecognized type: %T", message))
-	}
+	ctx.HandleRead(io.LimitReader(reader, int64(frameLength)))
 }
 
 func (v *varintLengthFieldCodec) HandleWrite(ctx netty.OutboundContext, message netty.Message) {
 
-	var bodyBytes []byte
-
-	switch r := message.(type) {
-	case []byte:
-		bodyBytes = r
-	case io.Reader:
-		bodyBytes = utils.AssertBytes(ioutil.ReadAll(r))
-	default:
-		utils.Assert(fmt.Errorf("unrecognized type: %T", message))
-	}
+	bodyBytes := utils.MustToBytes(message)
 
 	utils.AssertIf(len(bodyBytes) > v.maxFrameLength,
 		"frame length too large, frameLength(%d) > maxFrameLength(%d)", len(bodyBytes), v.maxFrameLength)
@@ -86,7 +63,7 @@ func (v *varintLengthFieldCodec) HandleWrite(ctx netty.OutboundContext, message 
 	var head = [binary.MaxVarintLen64]byte{}
 	n := binary.PutUvarint(head[:], uint64(len(bodyBytes)))
 
-	// Optimize one merge operation to reduce memory allocation.
+	// optimize one merge operation to reduce memory allocation.
 	ctx.HandleWrite([][]byte{
 		// header
 		head[:n],

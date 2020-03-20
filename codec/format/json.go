@@ -17,12 +17,7 @@
 package format
 
 import (
-	"bytes"
 	"encoding/json"
-	"fmt"
-	"io"
-	"strings"
-
 	"github.com/go-netty/go-netty"
 	"github.com/go-netty/go-netty/codec"
 	"github.com/go-netty/go-netty/utils"
@@ -47,47 +42,33 @@ func (*jsonCodec) CodecName() string {
 
 func (j *jsonCodec) HandleRead(ctx netty.InboundContext, message netty.Message) {
 
-	var msgReader io.Reader
+	// new json decoder from reader
+	jsonDecoder := json.NewDecoder(utils.MustToReader(message))
 
-	switch r := message.(type) {
-	case string:
-		msgReader = strings.NewReader(r)
-	case []byte:
-		msgReader = bytes.NewReader(r)
-	case io.Reader:
-		msgReader = r
-	default:
-		utils.Assert(fmt.Errorf("unsupported type: %T", message))
-		return
-	}
-
-	jsonDecoder := json.NewDecoder(msgReader)
-
+	// UseNumber causes the Decoder to unmarshal a number into an interface{} as a
+	// Number instead of as a float64.
 	if j.useNumber {
 		jsonDecoder.UseNumber()
 	}
 
+	// DisallowUnknownFields causes the Decoder to return an error when the destination
+	// is a struct and the input contains object keys which do not match any
+	// non-ignored, exported fields in the destination.
 	if j.disAllowUnknownFields {
 		jsonDecoder.DisallowUnknownFields()
 	}
 
-	// 解析到万能结构
+	// decode to map
 	var object = make(map[string]interface{})
 	utils.Assert(jsonDecoder.Decode(&object))
 
-	// 交给下一个处理器处理
+	// post object
 	ctx.HandleRead(object)
 }
 
 func (j *jsonCodec) HandleWrite(ctx netty.OutboundContext, message netty.Message) {
-
-	switch message.(type) {
-	case io.Reader, []byte, string:
-		ctx.HandleWrite(message)
-	default:
-		// 序列化数据
-		data := utils.AssertBytes(json.Marshal(message))
-		// 传递给下一个处理器处理
-		ctx.HandleWrite(bytes.NewReader(data))
-	}
+	// marshal object to json bytes
+	data := utils.AssertBytes(json.Marshal(message))
+	// post json
+	ctx.HandleWrite(data)
 }

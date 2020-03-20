@@ -17,23 +17,20 @@
 package frame
 
 import (
-	"bytes"
-	"fmt"
-	"io"
-
 	"github.com/go-netty/go-netty"
 	"github.com/go-netty/go-netty/codec"
 	"github.com/go-netty/go-netty/utils"
+	"io"
 )
 
 // PacketCodec create packet codec
 func PacketCodec(maxFrameLength int) codec.Codec {
 	utils.AssertIf(maxFrameLength <= 0, "maxFrameLength must be a positive integer")
-	return &packetCodec{maxFrameLength: maxFrameLength}
+	return &packetCodec{maxFrameLength: maxFrameLength, buffer: make([]byte, maxFrameLength)}
 }
 
 type packetCodec struct {
-	maxFrameLength int // 最大允许数据包长度
+	maxFrameLength int
 	buffer         []byte
 }
 
@@ -43,22 +40,11 @@ func (*packetCodec) CodecName() string {
 
 func (p *packetCodec) HandleRead(ctx netty.InboundContext, message netty.Message) {
 
-	// alloc packet buffer.
-	if nil == p.buffer {
-		p.buffer = make([]byte, p.maxFrameLength)
-	}
+	reader := utils.MustToReader(message)
+	n, err := reader.Read(p.buffer)
+	utils.AssertIf(nil != err && io.EOF != err, "%v", err)
 
-	switch r := message.(type) {
-	case io.Reader:
-		n, err := r.Read(p.buffer)
-		if nil != err && err != io.EOF {
-			panic(err)
-		}
-
-		ctx.HandleRead(bytes.NewReader(p.buffer[:n]))
-	default:
-		utils.Assert(fmt.Errorf("unrecognized type: %T", message))
-	}
+	ctx.HandleRead(p.buffer[:n])
 }
 
 func (*packetCodec) HandleWrite(ctx netty.OutboundContext, message netty.Message) {

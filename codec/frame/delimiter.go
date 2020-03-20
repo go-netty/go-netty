@@ -29,7 +29,7 @@ import (
 // DelimiterCodec create delimiter codec
 func DelimiterCodec(maxFrameLength int, delimiter string, stripDelimiter bool) codec.Codec {
 	utils.AssertIf(maxFrameLength <= 0, "maxFrameLength must be a positive integer")
-	utils.AssertIf(len(delimiter) <= 0, "delimiter must be a non empty string")
+	utils.AssertIf(len(delimiter) <= 0, "delimiter must be nonempty string")
 	return &delimiterCodec{
 		maxFrameLength: maxFrameLength,
 		delimiter:      []byte(delimiter),
@@ -49,35 +49,27 @@ func (*delimiterCodec) CodecName() string {
 
 func (d *delimiterCodec) HandleRead(ctx netty.InboundContext, message netty.Message) {
 
-	var msgReader io.Reader
-
-	switch r := message.(type) {
-	case []byte:
-		msgReader = bytes.NewReader(r)
-	case io.Reader:
-		msgReader = r
-	default:
-		utils.Assert(fmt.Errorf("unrecognized type: %T", message))
-	}
+	// wrap to io.Reader
+	reader := utils.MustToReader(message)
 
 	readBuff := make([]byte, 0, 16)
 	tempBuff := make([]byte, 1)
 	for len(readBuff) < d.maxFrameLength {
-		// 每次读取1个字节
-		n := utils.AssertLength(msgReader.Read(tempBuff[:]))
+		// read 1 byte
+		n := utils.AssertLength(reader.Read(tempBuff[:]))
 
-		// 追加数据
+		// append to buffer
 		readBuff = append(readBuff, tempBuff[:n]...)
 
-		// 比较分割符
+		// check delimiter in received buffer
 		if len(readBuff) >= len(d.delimiter) && bytes.Equal(d.delimiter, readBuff[len(readBuff)-len(d.delimiter):]) {
 
-			// 去除分隔符
+			// strip delimiter
 			if d.stripDelimiter {
 				readBuff = readBuff[:len(readBuff)-len(d.delimiter)]
 			}
 
-			// 将读取到的数据交由下一个处理器处理
+			// post message
 			ctx.HandleRead(bytes.NewReader(readBuff))
 			return
 		}
@@ -92,21 +84,18 @@ func (d *delimiterCodec) HandleWrite(ctx netty.OutboundContext, message netty.Me
 
 	switch r := message.(type) {
 	case []byte:
-		// 使用批量写优化一次内存分配
 		ctx.HandleWrite([][]byte{
-			// 数据包
+			// body
 			r,
-			// 尾部分割符
+			// delimiter
 			d.delimiter,
 		})
-	case io.Reader:
+	default:
 		ctx.HandleWrite(io.MultiReader(
-			// 数据包
-			r,
-			// 尾部分割符
+			// body
+			utils.MustToReader(message),
+			// delimiter
 			bytes.NewReader(d.delimiter)),
 		)
-	default:
-		utils.Assert(fmt.Errorf("unrecognized type: %T", message))
 	}
 }

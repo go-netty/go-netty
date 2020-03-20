@@ -18,74 +18,54 @@ package frame
 
 import (
 	"bytes"
-	"io"
-	"io/ioutil"
+	"fmt"
+	"github.com/go-netty/go-netty/utils"
+	"strings"
 	"testing"
 
 	"github.com/go-netty/go-netty"
 )
 
-func TestDelimiterCodec_HandleWrite(t *testing.T) {
+func TestDelimiterCodec(t *testing.T) {
 
-	var src = []byte("Hello go-netty")
-	var dst = append(append([]byte{}, src...), '\n')
-
-	ctx := netty.MockOutboundContext{
-		MockHandleWrite: func(message netty.Message) {
-
-			var msg []byte
-
-			switch m := message.(type) {
-			case [][]byte:
-				msg = append(msg, m[0]...)
-				msg = append(msg, m[1]...)
-			case io.Reader:
-				var err error
-				if msg, err = ioutil.ReadAll(m); nil != err {
-					t.Fatal(err)
-				}
-			default:
-				t.Fatal("wrong type", message)
-			}
-
-			if !bytes.Equal(msg, dst) {
-				t.Fatal(msg, "!=", dst)
-			}
-		},
+	var cases = []struct {
+		delimiter      string
+		stripDelimiter bool
+		input          []byte
+		output         interface{}
+	}{
+		{delimiter: "\n", stripDelimiter: true, output: []byte("123456789")},
+		{delimiter: "\n", stripDelimiter: false, output: []byte("123456789")},
+		{delimiter: "\n", stripDelimiter: true, output: []byte("123456789")},
+		{delimiter: "\n", stripDelimiter: false, output: []byte("123456789")},
+		{delimiter: "\r\n", stripDelimiter: true, output: []byte("123456789")},
+		{delimiter: "\r\n", stripDelimiter: false, output: []byte("123456789")},
+		{delimiter: "\r\n", stripDelimiter: true, output: []byte("123456789")},
+		{delimiter: "\r\n", stripDelimiter: false, output: []byte("123456789")},
+		{delimiter: "\n", stripDelimiter: false, output: strings.NewReader("123456789")},
+		{delimiter: "\r\n", stripDelimiter: true, output: strings.NewReader("123456789")},
 	}
 
-	delimiterCodec := DelimiterCodec(1024, "\n", true)
-	delimiterCodec.HandleWrite(ctx, src)
-	delimiterCodec.HandleWrite(ctx, bytes.NewReader(src))
-}
+	for index, c := range cases {
+		codec := DelimiterCodec(1024, c.delimiter, c.stripDelimiter)
+		t.Run(fmt.Sprint(codec.CodecName(), "#", index), func(t *testing.T) {
+			ctx := netty.MockHandlerContext{
+				MockHandleRead: func(message netty.Message) {
+					if c.stripDelimiter {
+						c.input = bytes.TrimRight(c.input, c.delimiter)
+					}
+					if dst := utils.MustToBytes(message); !bytes.Equal(dst, c.input) {
+						t.Fatal(dst, "!=", c.input)
+					}
+				},
 
-func TestDelimiterCodec_HandleRead(t *testing.T) {
-
-	var src = []byte("Hello go-netty")
-	var dst = append(append([]byte{}, src...), '\n')
-
-	ctx := netty.MockInboundContext{
-		MockHandleRead: func(message netty.Message) {
-
-			var msg []byte
-
-			switch m := message.(type) {
-			case io.Reader:
-				var err error
-				if msg, err = ioutil.ReadAll(m); nil != err {
-					t.Fatal(err)
-				}
-			default:
-				t.Fatal("wrong type", message)
+				MockHandleWrite: func(message netty.Message) {
+					c.input = utils.MustToBytes(message)
+				},
 			}
-
-			if !bytes.Equal(msg, src) {
-				t.Fatal(msg, "!=", src)
-			}
-		},
+			codec.HandleWrite(ctx, c.output)
+			codec.HandleRead(ctx, c.input)
+		})
 	}
 
-	delimiterCodec := DelimiterCodec(1024, "\n", true)
-	delimiterCodec.HandleRead(ctx, dst)
-	delimiterCodec.HandleRead(ctx, bytes.NewReader(dst))
 }

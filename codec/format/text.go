@@ -17,13 +17,11 @@
 package format
 
 import (
-	"io"
-	"io/ioutil"
+	"github.com/go-netty/go-netty/utils"
 	"strings"
 
 	"github.com/go-netty/go-netty"
 	"github.com/go-netty/go-netty/codec"
-	"github.com/go-netty/go-netty/utils"
 )
 
 // TextCodec create a text codec
@@ -39,29 +37,23 @@ func (*textCodec) CodecName() string {
 
 func (*textCodec) HandleRead(ctx netty.InboundContext, message netty.Message) {
 
-	switch r := message.(type) {
-	case []byte:
-		// 二进制转字符串
-		ctx.HandleRead(string(r))
-	case io.Reader:
-		// 读取所有的包二进制
-		data := utils.AssertBytes(ioutil.ReadAll(r))
-		// 转换为字符串传递给下文
-		ctx.HandleRead(string(data))
-	default:
-		// 不认识的类型传递给下一个处理器处理
-		ctx.HandleRead(message)
-	}
+	// read text bytes
+	textBytes := utils.MustToBytes(message)
+
+	// convert from []byte to string
+	sb := strings.Builder{}
+	sb.Write(textBytes)
+
+	// post text
+	ctx.HandleRead(sb.String())
 }
 
 func (*textCodec) HandleWrite(ctx netty.OutboundContext, message netty.Message) {
 
-	switch r := message.(type) {
+	switch s := message.(type) {
 	case string:
-		// 字符串转换为二进制流传递给下一个处理器
-		ctx.HandleWrite(strings.NewReader(r))
+		ctx.HandleWrite(strings.NewReader(s))
 	default:
-		// 不认识的类型传递给下一个处理器处理
 		ctx.HandleWrite(message)
 	}
 }

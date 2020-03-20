@@ -17,9 +17,6 @@
 package frame
 
 import (
-	"fmt"
-	"io"
-
 	"github.com/go-netty/go-netty"
 	"github.com/go-netty/go-netty/codec"
 	"github.com/go-netty/go-netty/utils"
@@ -27,11 +24,13 @@ import (
 
 // VariableLengthCodec create maximum received length codec
 func VariableLengthCodec(maxReadLength int) codec.Codec {
-	return &variableLengthCodec{maxReadLength: maxReadLength}
+	utils.AssertIf(maxReadLength <= 0, "maxReadLength must be a positive integer")
+	return &variableLengthCodec{maxReadLength: maxReadLength, buffer: make([]byte, maxReadLength)}
 }
 
 type variableLengthCodec struct {
 	maxReadLength int // maximum received length
+	buffer        []byte
 }
 
 func (*variableLengthCodec) CodecName() string {
@@ -40,14 +39,9 @@ func (*variableLengthCodec) CodecName() string {
 
 func (v *variableLengthCodec) HandleRead(ctx netty.InboundContext, message netty.Message) {
 
-	switch r := message.(type) {
-	case io.Reader:
-		var buff = make([]byte, v.maxReadLength)
-		var n = utils.AssertLength(r.Read(buff))
-		ctx.HandleRead(buff[:n])
-	default:
-		utils.Assert(fmt.Errorf("unrecognized type: %T", message))
-	}
+	reader := utils.MustToReader(message)
+	var n = utils.AssertLength(reader.Read(v.buffer))
+	ctx.HandleRead(v.buffer[:n])
 }
 
 func (*variableLengthCodec) HandleWrite(ctx netty.OutboundContext, message netty.Message) {

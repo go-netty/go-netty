@@ -19,85 +19,41 @@ package format
 import (
 	"bytes"
 	"encoding/json"
-	"io"
-	"io/ioutil"
-	"testing"
-
+	"fmt"
 	"github.com/go-netty/go-netty"
+	"github.com/go-netty/go-netty/utils"
+	"testing"
 )
 
 func TestJsonCodec_HandleWrite(t *testing.T) {
 
-	data, err := json.Marshal(map[string]interface{}{"key": "1234567890", "value": 123456789})
-	if nil != err {
-		t.Fatal(err)
+	var cases = []struct {
+		useNumber             bool
+		disAllowUnknownFields bool
+		input                 []byte
+		output                interface{}
+	}{
+		{useNumber: true, disAllowUnknownFields: false, output: map[string]interface{}{"key": 123456789}},
+		{useNumber: false, disAllowUnknownFields: false, output: map[string]interface{}{"key": 123456789}},
+		{useNumber: false, disAllowUnknownFields: true, output: map[string]interface{}{"key": 123456789}},
 	}
 
-	ctx := netty.MockOutboundContext{
-		MockHandleWrite: func(message netty.Message) {
-			var dst []byte
-			switch m := message.(type) {
-			case io.Reader:
-				var err error
-				if dst, err = ioutil.ReadAll(m); nil != err {
-					t.Fatal(err)
-				}
-			case string:
-				dst = []byte(m)
-			case []byte:
-				dst = m
-			default:
-				t.Fatal("wrong type", message)
-			}
+	for index, c := range cases {
+		codec := JSONCodec(c.useNumber, c.disAllowUnknownFields)
+		t.Run(fmt.Sprint(codec.CodecName(), "#", index), func(t *testing.T) {
+			ctx := netty.MockHandlerContext{
+				MockHandleRead: func(message netty.Message) {
+					if dst := utils.AssertBytes(json.Marshal(message)); !bytes.Equal(dst, c.input) {
+						t.Fatalf("%v != %v", dst, c.input)
+					}
+				},
 
-			if !bytes.Equal(data, dst) {
-				t.Fatal(data, "!=", dst)
+				MockHandleWrite: func(message netty.Message) {
+					c.input = utils.MustToBytes(message)
+				},
 			}
-		},
+			codec.HandleWrite(ctx, c.output)
+			codec.HandleRead(ctx, c.input)
+		})
 	}
-
-	jsonCodec1 := JSONCodec(true, false)
-	jsonCodec1.HandleWrite(ctx, data)
-
-	jsonCodec2 := JSONCodec(false, false)
-	jsonCodec2.HandleWrite(ctx, data)
-
-	jsonCodec3 := JSONCodec(true, true)
-	jsonCodec3.HandleWrite(ctx, data)
-
-	jsonCodec4 := JSONCodec(false, true)
-	jsonCodec4.HandleWrite(ctx, data)
-}
-
-func TestJsonCodec_HandleRead(t *testing.T) {
-
-	data, err := json.Marshal(map[string]interface{}{"key": "1234567890", "value": 123456789})
-	if nil != err {
-		t.Fatal(err)
-	}
-
-	ctx := netty.MockInboundContext{
-		MockHandleRead: func(message netty.Message) {
-			dst, err := json.Marshal(message.(map[string]interface{}))
-			if nil != err {
-				t.Fatal(err)
-			}
-
-			if !bytes.Equal(data, dst) {
-				t.Fatal(data, "!=", dst)
-			}
-		},
-	}
-
-	jsonCodec1 := JSONCodec(true, false)
-	jsonCodec1.HandleRead(ctx, data)
-
-	jsonCodec2 := JSONCodec(false, false)
-	jsonCodec2.HandleRead(ctx, data)
-
-	jsonCodec3 := JSONCodec(true, true)
-	jsonCodec3.HandleRead(ctx, data)
-
-	jsonCodec4 := JSONCodec(false, true)
-	jsonCodec4.HandleRead(ctx, data)
 }

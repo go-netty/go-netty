@@ -19,9 +19,7 @@ package codec
 import "github.com/go-netty/go-netty"
 
 // Codec defines an CodecHandler alias
-type Codec interface {
-	netty.CodecHandler
-}
+type Codec = netty.CodecHandler
 
 // Combine to wrap InboundHandler and OutboundHandler into Codec.
 func Combine(name string, inbound netty.InboundHandler, outbound netty.OutboundHandler) Codec {
@@ -29,9 +27,9 @@ func Combine(name string, inbound netty.InboundHandler, outbound netty.OutboundH
 }
 
 type combineCodec struct {
-	name string
 	netty.InboundHandler
 	netty.OutboundHandler
+	name string
 }
 
 func (c *combineCodec) CodecName() string {

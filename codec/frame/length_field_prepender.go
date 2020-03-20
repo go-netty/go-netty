@@ -18,12 +18,8 @@ package frame
 
 import (
 	"encoding/binary"
-	"fmt"
 	"github.com/go-netty/go-netty"
-	"github.com/go-netty/go-netty/codec"
 	"github.com/go-netty/go-netty/utils"
-	"io"
-	"io/ioutil"
 )
 
 // LengthFieldPrepender for LengthFieldCodec
@@ -34,7 +30,7 @@ func LengthFieldPrepender(
 	lengthFieldLength int,
 	lengthAdjustment int,
 	lengthIncludesLengthFieldLength bool,
-) codec.Codec {
+) netty.OutboundHandler {
 	utils.AssertIf(lengthFieldLength != 1 && lengthFieldLength != 2 &&
 		lengthFieldLength != 4 && lengthFieldLength != 8, "lengthFieldLength must be either 1, 2, 3, 4, or 8")
 	return &lengthFieldPrepender{
@@ -52,48 +48,18 @@ type lengthFieldPrepender struct {
 	lengthIncludesLengthFieldLength bool
 }
 
-func (l *lengthFieldPrepender) CodecName() string {
-	return "length-field-prepender"
-}
-
-func (l *lengthFieldPrepender) HandleRead(ctx netty.InboundContext, message netty.Message) {
-	ctx.HandleRead(message)
-}
-
 func (l *lengthFieldPrepender) HandleWrite(ctx netty.OutboundContext, message netty.Message) {
 
-	var bodyBytes []byte
-
-	switch r := message.(type) {
-	case []byte:
-		bodyBytes = r
-	case io.Reader:
-		bodyBytes = utils.AssertBytes(ioutil.ReadAll(r))
-	default:
-		utils.Assert(fmt.Errorf("unrecognized type: %T", message))
-	}
+	bodyBytes := utils.MustToBytes(message)
 
 	length := len(bodyBytes) + l.lengthAdjustment
 	if l.lengthIncludesLengthFieldLength {
 		length += l.lengthFieldLength
 	}
 
-	lengthBuff := make([]byte, l.lengthFieldLength)
+	// head buffer
+	lengthBuff := packFieldLength(l.byteOrder, l.lengthFieldLength, int64(length))
 
-	switch l.lengthFieldLength {
-	case 1:
-		lengthBuff[0] = byte(length)
-	case 2:
-		l.byteOrder.PutUint16(lengthBuff, uint16(length))
-	case 4:
-		l.byteOrder.PutUint32(lengthBuff, uint32(length))
-	case 8:
-		l.byteOrder.PutUint64(lengthBuff, uint64(length))
-	default:
-		utils.Assert(fmt.Errorf("should not reach here"))
-	}
-
-	// 优化掉一次组包操作，降低内存分配操作
-	// 批量写数据
+	// HEAD | BODY
 	ctx.HandleWrite([][]byte{lengthBuff, bodyBytes})
 }

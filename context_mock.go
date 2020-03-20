@@ -25,6 +25,8 @@ type MockHandlerContext struct {
 	MockTrigger       func(event Event)
 	MockAttachment    func() Attachment
 	MockSetAttachment func(attachment Attachment)
+	MockHandleRead    func(message Message)
+	MockHandleWrite   func(message Message)
 }
 
 // Channel to mock Channel of HandlerContext
@@ -79,28 +81,16 @@ func (m MockHandlerContext) SetAttachment(attachment Attachment) {
 	}
 }
 
-// MockOutboundContext mock for OutboundContext
-type MockOutboundContext struct {
-	MockHandlerContext
-	MockHandleWrite func(message Message)
-}
-
-// HandleWrite to mock HandleWrite of OutboundContext
-func (m MockOutboundContext) HandleWrite(message Message) {
-	if m.MockHandleWrite != nil {
-		m.MockHandleWrite(message)
+// HandleRead to mock HandleRead of InboundContext
+func (m MockHandlerContext) HandleRead(message Message) {
+	if m.MockHandleRead != nil {
+		m.MockHandleRead(message)
 	}
 }
 
-// MockInboundContext mock for InboundContext
-type MockInboundContext struct {
-	MockHandlerContext
-	MockHandleRead func(message Message)
-}
-
-// HandleRead to mock HandleRead of InboundContext
-func (m MockInboundContext) HandleRead(message Message) {
-	if m.MockHandleRead != nil {
-		m.MockHandleRead(message)
+// HandleWrite to mock HandleWrite of OutboundContext
+func (m MockHandlerContext) HandleWrite(message Message) {
+	if m.MockHandleWrite != nil {
+		m.MockHandleWrite(message)
 	}
 }

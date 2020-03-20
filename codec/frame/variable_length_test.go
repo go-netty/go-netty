@@ -18,60 +18,41 @@ package frame
 
 import (
 	"bytes"
-	"testing"
-
+	"fmt"
 	"github.com/go-netty/go-netty"
+	"github.com/go-netty/go-netty/utils"
+	"strings"
+	"testing"
 )
 
-func TestVariableLengthCodec_HandleWrite(t *testing.T) {
+func TestVariableLengthCodec(t *testing.T) {
 
-	var text = []byte("Hello go-netty")
-
-	ctx := netty.MockOutboundContext{
-		MockHandleWrite: func(message netty.Message) {
-
-			switch m := message.(type) {
-			case []byte:
-				if !bytes.Equal(m, text) {
-					t.Fatal(m, "!=", text)
-				}
-
-			default:
-				t.Fatal("wrong type", message)
-			}
-		},
+	var cases = []struct {
+		maxReadLen int
+		input      []byte
+		output     interface{}
+	}{
+		{maxReadLen: 1024, output: "123456789"},
+		{maxReadLen: 1024, output: strings.NewReader("123456789")},
 	}
 
-	varLengthCodec := VariableLengthCodec(5)
-	varLengthCodec.HandleWrite(ctx, text)
+	for index, c := range cases {
+		codec := VariableLengthCodec(c.maxReadLen)
+		t.Run(fmt.Sprint(codec.CodecName(), "#", index), func(t *testing.T) {
+			ctx := netty.MockHandlerContext{
+				MockHandleRead: func(message netty.Message) {
+					if dst := utils.MustToBytes(message); !bytes.Equal(dst, c.input) {
+						t.Fatalf("%v != %v", dst, c.input)
+					}
+				},
 
-}
-
-func TestVariableLengthCodec_HandleRead(t *testing.T) {
-
-	var text = []byte("Hello go-netty")
-
-	ctx := netty.MockInboundContext{
-		MockHandleRead: func(message netty.Message) {
-
-			switch m := message.(type) {
-			case []byte:
-
-				if len(m) > 5 {
-					t.Fatal("wrong length", len(m))
-				}
-
-				if !bytes.Equal(m, text[:len(m)]) {
-					t.Fatal(m, "!=", text[:len(m)])
-				}
-
-			default:
-				t.Fatal("wrong type", message)
+				MockHandleWrite: func(message netty.Message) {
+					c.input = utils.MustToBytes(message)
+				},
 			}
-		},
+			codec.HandleWrite(ctx, c.output)
+			codec.HandleRead(ctx, c.input)
+		})
 	}
-
-	varLengthCodec := VariableLengthCodec(5)
-	varLengthCodec.HandleRead(ctx, bytes.NewReader(text))
 
 }

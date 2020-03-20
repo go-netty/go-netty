@@ -18,60 +18,40 @@ package frame
 
 import (
 	"bytes"
-	"io"
-	"io/ioutil"
-	"testing"
-
+	"fmt"
 	"github.com/go-netty/go-netty"
+	"github.com/go-netty/go-netty/utils"
+	"strings"
+	"testing"
 )
 
-func TestPacketCodec_HandleWrite(t *testing.T) {
+func TestPacketCodec(t *testing.T) {
 
-	var text = []byte("Hello go-netty")
-
-	ctx := netty.MockOutboundContext{
-		MockHandleWrite: func(message netty.Message) {
-
-			var msg []byte
-
-			switch m := message.(type) {
-			case io.Reader:
-				var err error
-				if msg, err = ioutil.ReadAll(m); nil != err {
-					t.Fatal(err)
-				}
-			default:
-				t.Fatal("wrong type", message)
-			}
-
-			if !bytes.Equal(msg, text) {
-				t.Fatal(msg, "!=", text)
-			}
-		},
+	var cases = []struct {
+		maxFrameLen int
+		input       []byte
+		output      interface{}
+	}{
+		{maxFrameLen: 1024, output: []byte("123456789")},
+		{maxFrameLen: 1024, output: strings.NewReader("123456789")},
 	}
 
-	eofCodec := PacketCodec(1024)
-	eofCodec.HandleWrite(ctx, bytes.NewReader(text))
-}
+	for index, c := range cases {
+		codec := PacketCodec(c.maxFrameLen)
+		t.Run(fmt.Sprint(codec.CodecName(), "#", index), func(t *testing.T) {
+			ctx := netty.MockHandlerContext{
+				MockHandleRead: func(message netty.Message) {
+					if dst := utils.MustToBytes(message); !bytes.Equal(dst, c.input) {
+						t.Fatalf("%v != %v", dst, c.input)
+					}
+				},
 
-func TestPacketCodec_HandleRead(t *testing.T) {
-
-	var text = []byte("Hello go-netty")
-
-	ctx := netty.MockInboundContext{
-		MockHandleRead: func(message netty.Message) {
-
-			msg, err := ioutil.ReadAll(message.(io.Reader))
-			if nil != err {
-				t.Fatal(err)
+				MockHandleWrite: func(message netty.Message) {
+					c.input = utils.MustToBytes(message)
+				},
 			}
-
-			if !bytes.Equal(msg, text) {
-				t.Fatal(msg, "!=", text)
-			}
-		},
+			codec.HandleWrite(ctx, c.output)
+			codec.HandleRead(ctx, c.input)
+		})
 	}
-
-	eofCodec := PacketCodec(1024)
-	eofCodec.HandleRead(ctx, bytes.NewReader(text))
 }
