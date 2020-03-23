@@ -21,7 +21,7 @@ import (
 	"io"
 	"io/ioutil"
 	"runtime/debug"
-	"sync/atomic"
+	"sync"
 	"time"
 
 	"github.com/go-netty/go-netty/utils"
@@ -233,39 +233,58 @@ func WriteIdleHandler(idleTime time.Duration) ChannelOutboundHandler {
 
 // readIdleHandler
 type readIdleHandler struct {
+	mutex        sync.RWMutex
 	idleTime     time.Duration
-	lastReadTime atomic.Value // time.Time
-	readTimer    atomic.Value // *time.Timer
-	handlerCtx   atomic.Value // HandlerContext
+	lastReadTime time.Time
+	readTimer    *time.Timer
+	handlerCtx   HandlerContext
+}
+
+func (r *readIdleHandler) withLock(fn func()) {
+	r.mutex.Lock()
+	defer r.mutex.Unlock()
+	fn()
+}
+
+func (r *readIdleHandler) withReadLock(fn func()) {
+	r.mutex.RLock()
+	defer r.mutex.RUnlock()
+	fn()
 }
 
 func (r *readIdleHandler) HandleActive(ctx ActiveContext) {
 	// cache context.
-	r.handlerCtx.Store(ctx)
-	r.lastReadTime.Store(time.Now())
-	r.readTimer.Store(time.AfterFunc(r.idleTime, r.onReadTimeout))
+	r.withLock(func() {
+		r.handlerCtx = ctx
+		r.lastReadTime = time.Now()
+		r.readTimer = time.AfterFunc(r.idleTime, r.onReadTimeout)
+	})
 	// post the active event.
 	ctx.HandleActive()
 }
 
 func (r *readIdleHandler) HandleRead(ctx InboundContext, message Message) {
 	ctx.HandleRead(message)
-	// update last read time.
-	r.lastReadTime.Store(time.Now())
-	// reset timer.
-	if readTimer, ok := r.readTimer.Load().(*time.Timer); ok {
-		readTimer.Reset(r.idleTime)
-	}
+
+	r.withLock(func() {
+		// update last read time.
+		r.lastReadTime = time.Now()
+		// reset timer.
+		if r.readTimer != nil {
+			r.readTimer.Reset(r.idleTime)
+		}
+	})
 }
 
 func (r *readIdleHandler) HandleInactive(ctx InactiveContext, ex Exception) {
 
-	// reset timer.
-	r.handlerCtx = atomic.Value{}
-	if readTimer, ok := r.readTimer.Load().(*time.Timer); ok {
-		r.readTimer = atomic.Value{}
-		readTimer.Stop()
-	}
+	r.withLock(func() {
+		r.handlerCtx = nil
+		if r.readTimer != nil {
+			r.readTimer.Stop()
+			r.readTimer = nil
+		}
+	})
 
 	// post the inactive event.
 	ctx.HandleInactive(ex)
@@ -273,73 +292,96 @@ func (r *readIdleHandler) HandleInactive(ctx InactiveContext, ex Exception) {
 
 func (r *readIdleHandler) onReadTimeout() {
 
-	ctx, ok := r.handlerCtx.Load().(HandlerContext)
-	if !ok {
-		return
-	}
+	var expired = false
 
-	lastReadTime := r.lastReadTime.Load().(time.Time)
+	r.withReadLock(func() {
+		// check if the idle time expires.
+		expired = time.Since(r.lastReadTime) >= r.idleTime
+	})
 
-	// check if the idle time expires.
-	if d := time.Since(lastReadTime); d >= r.idleTime {
-
+	if expired {
 		// trigger event.
 		func() {
 			// capture exception.
 			defer func() {
 				if err := recover(); nil != err {
-					ctx.Channel().Pipeline().fireChannelException(AsException(err, debug.Stack()))
+					r.handlerCtx.Channel().Pipeline().fireChannelException(AsException(err, debug.Stack()))
 				}
 			}()
 
 			// trigger ReadIdleEvent.
-			ctx.Trigger(ReadIdleEvent{})
+			r.handlerCtx.Trigger(ReadIdleEvent{})
 		}()
 	}
 
-	// reset timer.
-	if readTimer, ok := r.readTimer.Load().(*time.Timer); ok {
-		readTimer.Reset(r.idleTime)
-	}
+	// reset timer
+	r.withReadLock(func() {
+		if r.readTimer != nil {
+			r.readTimer.Reset(r.idleTime)
+		}
+	})
 }
 
 // writeIdleHandler
 type writeIdleHandler struct {
+	mutex         sync.RWMutex
 	idleTime      time.Duration
-	lastWriteTime atomic.Value // time.Time
-	writeTimer    atomic.Value // *time.Timer
-	handlerCtx    atomic.Value // HandlerContext
+	lastWriteTime time.Time
+	writeTimer    *time.Timer
+	handlerCtx    HandlerContext
+}
+
+func (w *writeIdleHandler) withLock(fn func()) {
+	w.mutex.Lock()
+	defer w.mutex.Unlock()
+	fn()
+}
+
+func (w *writeIdleHandler) withReadLock(fn func()) {
+	w.mutex.RLock()
+	defer w.mutex.RUnlock()
+	fn()
 }
 
 func (w *writeIdleHandler) HandleActive(ctx ActiveContext) {
+
 	// cache context
-	w.handlerCtx.Store(ctx)
-	w.lastWriteTime.Store(time.Now())
-	w.writeTimer.Store(time.AfterFunc(w.idleTime, w.onWriteTimeout))
+	w.withLock(func() {
+		w.handlerCtx = ctx
+		w.lastWriteTime = time.Now()
+		w.writeTimer = time.AfterFunc(w.idleTime, w.onWriteTimeout)
+	})
+
 	// post the active event.
 	ctx.HandleActive()
 }
 
 func (w *writeIdleHandler) HandleWrite(ctx OutboundContext, message Message) {
+
 	// update last write time.
-	w.lastWriteTime.Store(time.Now())
-	// reset timer.
-	if writeTimer, ok := w.writeTimer.Load().(*time.Timer); ok {
-		writeTimer.Reset(w.idleTime)
-	}
+	w.withLock(func() {
+		w.lastWriteTime = time.Now()
+		// reset timer.
+		if w.writeTimer != nil {
+			w.writeTimer.Reset(w.idleTime)
+		}
+	})
+
 	// post write event.
 	ctx.HandleWrite(message)
 }
 
 func (w *writeIdleHandler) HandleInactive(ctx InactiveContext, ex Exception) {
-	// reset context
-	w.handlerCtx = atomic.Value{}
 
-	// stop the timer.
-	if writeTimer, ok := w.writeTimer.Load().(*time.Timer); ok {
-		w.writeTimer = atomic.Value{}
-		writeTimer.Stop()
-	}
+	w.withLock(func() {
+		// reset context
+		w.handlerCtx = nil
+		// stop the timer.
+		if w.writeTimer != nil {
+			w.writeTimer.Stop()
+			w.writeTimer = nil
+		}
+	})
 
 	// post the inactive event.
 	ctx.HandleInactive(ex)
@@ -347,32 +389,34 @@ func (w *writeIdleHandler) HandleInactive(ctx InactiveContext, ex Exception) {
 
 func (w *writeIdleHandler) onWriteTimeout() {
 
-	ctx, ok := w.handlerCtx.Load().(HandlerContext)
-	if !ok {
-		return
-	}
+	var expired = false
 
-	lastWriteTime := w.lastWriteTime.Load().(time.Time)
+	w.withReadLock(func() {
+		// check if the idle time expires.
+		expired = time.Since(w.lastWriteTime) >= w.idleTime
+	})
 
 	// check if the idle time expires
-	if d := time.Since(lastWriteTime); d >= w.idleTime {
-
+	if expired {
 		// trigger event.
 		func() {
 			// capture exception
 			defer func() {
 				if err := recover(); nil != err {
-					ctx.Channel().Pipeline().fireChannelException(AsException(err, debug.Stack()))
+					w.handlerCtx.Channel().Pipeline().fireChannelException(AsException(err, debug.Stack()))
 				}
 			}()
 
 			// trigger WriteIdleEvent.
-			ctx.Trigger(WriteIdleEvent{})
+			w.handlerCtx.Trigger(WriteIdleEvent{})
 		}()
 	}
 
 	// reset timer.
-	if writeTimer, ok := w.writeTimer.Load().(*time.Timer); ok {
-		writeTimer.Reset(w.idleTime)
-	}
+	w.withReadLock(func() {
+		if w.writeTimer != nil {
+			w.writeTimer.Reset(w.idleTime)
+		}
+	})
+
 }

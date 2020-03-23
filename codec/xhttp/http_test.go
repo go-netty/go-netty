@@ -50,7 +50,7 @@ func TestServerCodec(t *testing.T) {
 		channel.Pipeline().
 			AddLast(ClientCodec()).
 			AddLast(netty.ActiveHandlerFunc(func(ctx netty.ActiveContext) {
-				request, err := http.NewRequestWithContext(ctx.Channel().Context(), "GET", "http://127.0.0.1:9527/test", nil)
+				request, err := http.NewRequest("GET", "http://127.0.0.1:9526/test", nil)
 				if nil != err {
 					t.Fatal(err)
 				}
@@ -72,9 +72,9 @@ func TestServerCodec(t *testing.T) {
 			}))
 	})
 
-	bootstrap.Transport(tcp.New()).Listen("127.0.0.1:9527")
+	bootstrap.Transport(tcp.New()).Listen("127.0.0.1:9526")
 
-	if _, err := bootstrap.Connect("127.0.0.1:9527", nil); nil != err {
+	if _, err := bootstrap.Connect("127.0.0.1:9526", nil); nil != err {
 		t.Fatal(err)
 	}
 
