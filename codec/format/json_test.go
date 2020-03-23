@@ -41,7 +41,7 @@ func TestJsonCodec_HandleWrite(t *testing.T) {
 	for index, c := range cases {
 		codec := JSONCodec(c.useNumber, c.disAllowUnknownFields)
 		t.Run(fmt.Sprint(codec.CodecName(), "#", index), func(t *testing.T) {
-			ctx := netty.MockHandlerContext{
+			ctx := MockHandlerContext{
 				MockHandleRead: func(message netty.Message) {
 					if dst := utils.AssertBytes(json.Marshal(message)); !bytes.Equal(dst, c.input) {
 						t.Fatalf("%v != %v", dst, c.input)

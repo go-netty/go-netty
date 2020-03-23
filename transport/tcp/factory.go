@@ -45,14 +45,12 @@ func (f *tcpFactory) Connect(options *transport.Options) (transport.Transport, e
 
 	tcpOptions := FromContext(options.Context, DefaultOption)
 
-	// 连接服务器
 	var d = net.Dialer{Timeout: tcpOptions.Timeout}
 	conn, err := d.DialContext(options.Context, options.Address.Scheme, options.Address.Host)
 	if nil != err {
 		return nil, err
 	}
 
-	// 连接成功
 	return (&tcpTransport{TCPConn: conn.(*net.TCPConn)}).applyOptions(tcpOptions, true)
 }
 
@@ -62,10 +60,8 @@ func (f *tcpFactory) Listen(options *transport.Options) (transport.Acceptor, err
 		return nil, err
 	}
 
-	// 关闭已有监听
 	_ = f.Close()
 
-	// 监听本地端口
 	l, err := net.Listen(options.Address.Scheme, options.AddressWithoutHost())
 	if nil != err {
 		return nil, err

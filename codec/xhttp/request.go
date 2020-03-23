@@ -29,10 +29,6 @@ import (
 type requestCodec struct {
 }
 
-func (*requestCodec) CodecName() string {
-	return "http-request-codec"
-}
-
 func (*requestCodec) HandleRead(ctx netty.InboundContext, message netty.Message) {
 
 	switch r := message.(type) {

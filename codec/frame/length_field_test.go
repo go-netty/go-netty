@@ -51,7 +51,7 @@ func TestLengthFieldCodec(t *testing.T) {
 	for _, c := range cases {
 		codec := LengthFieldCodec(c.byteOrder, c.maxFrameLen, c.fieldOffset, c.fieldLen, c.lengthAdjustment, c.bytesToStrip)
 		t.Run(codec.CodecName(), func(t *testing.T) {
-			ctx := netty.MockHandlerContext{
+			ctx := MockHandlerContext{
 				MockHandleRead: func(message netty.Message) {
 					if dst := utils.MustToBytes(message); !bytes.Equal(dst, c.input[c.bytesToStrip:]) {
 						t.Fatalf("%v != %v", dst, c.input[c.bytesToStrip:])

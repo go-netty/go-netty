@@ -246,6 +246,7 @@ func (c *channel) writeLoop() {
 			// flush buffer
 			utils.Assert(c.transport.Flush())
 		case <-c.ctx.Done():
+			c.Close()
 			return
 		}
 	}

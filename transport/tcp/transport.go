@@ -27,7 +27,6 @@ type tcpTransport struct {
 }
 
 func (t *tcpTransport) Writev(buffs transport.Buffers) (int64, error) {
-	// 利用tcp的writev接口批量写数据达到优化发送效率的目的
 	return buffs.Buffers.WriteTo(t.TCPConn)
 }
 

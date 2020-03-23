@@ -52,13 +52,13 @@ func (r *responseWriter) Write(b []byte) (int, error) {
 
 func (r *responseWriter) response() *http.Response {
 	if 0 == r.statusCode {
-		r.statusCode = http.StatusOK
+		r.WriteHeader(http.StatusOK)
 	}
 	return &http.Response{
 		ProtoMajor:    r.protoMajor,
 		ProtoMinor:    r.protoMinor,
 		StatusCode:    r.statusCode,
-		Header:        r.header,
+		Header:        r.Header(),
 		Body:          ioutil.NopCloser(&r.body),
 		ContentLength: int64(r.body.Len()),
 	}

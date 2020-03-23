@@ -252,14 +252,18 @@ func (r *readIdleHandler) HandleRead(ctx InboundContext, message Message) {
 	ctx.HandleRead(message)
 	// update last read time.
 	r.lastReadTime.Store(time.Now())
+	// reset timer.
+	if readTimer, ok := r.readTimer.Load().(*time.Timer); ok {
+		readTimer.Reset(r.idleTime)
+	}
 }
 
 func (r *readIdleHandler) HandleInactive(ctx InactiveContext, ex Exception) {
 
 	// reset timer.
-	r.handlerCtx.Store(nil)
+	r.handlerCtx = atomic.Value{}
 	if readTimer, ok := r.readTimer.Load().(*time.Timer); ok {
-		r.readTimer.Store(nil)
+		r.readTimer = atomic.Value{}
 		readTimer.Stop()
 	}
 
@@ -319,17 +323,21 @@ func (w *writeIdleHandler) HandleActive(ctx ActiveContext) {
 func (w *writeIdleHandler) HandleWrite(ctx OutboundContext, message Message) {
 	// update last write time.
 	w.lastWriteTime.Store(time.Now())
+	// reset timer.
+	if writeTimer, ok := w.writeTimer.Load().(*time.Timer); ok {
+		writeTimer.Reset(w.idleTime)
+	}
 	// post write event.
 	ctx.HandleWrite(message)
 }
 
 func (w *writeIdleHandler) HandleInactive(ctx InactiveContext, ex Exception) {
 	// reset context
-	w.handlerCtx.Store(nil)
+	w.handlerCtx = atomic.Value{}
 
 	// stop the timer.
 	if writeTimer, ok := w.writeTimer.Load().(*time.Timer); ok {
-		w.writeTimer.Store(nil)
+		w.writeTimer = atomic.Value{}
 		writeTimer.Stop()
 	}
 

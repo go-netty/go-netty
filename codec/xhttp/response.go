@@ -29,10 +29,6 @@ import (
 type responseCodec struct {
 }
 
-func (*responseCodec) CodecName() string {
-	return "http-response-codec"
-}
-
 func (*responseCodec) HandleRead(ctx netty.InboundContext, message netty.Message) {
 
 	reader := utils.MustToReader(message)
@@ -40,11 +36,6 @@ func (*responseCodec) HandleRead(ctx netty.InboundContext, message netty.Message
 	response, err := http.ReadResponse(bufio.NewReader(reader), nil)
 	utils.Assert(err)
 	ctx.HandleRead(response)
-
-	// auto close the response body.
-	if response.Body != nil {
-		_ = response.Body.Close()
-	}
 }
 
 func (*responseCodec) HandleWrite(ctx netty.OutboundContext, message netty.Message) {

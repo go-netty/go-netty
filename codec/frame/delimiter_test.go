@@ -49,7 +49,7 @@ func TestDelimiterCodec(t *testing.T) {
 	for index, c := range cases {
 		codec := DelimiterCodec(1024, c.delimiter, c.stripDelimiter)
 		t.Run(fmt.Sprint(codec.CodecName(), "#", index), func(t *testing.T) {
-			ctx := netty.MockHandlerContext{
+			ctx := MockHandlerContext{
 				MockHandleRead: func(message netty.Message) {
 					if c.stripDelimiter {
 						c.input = bytes.TrimRight(c.input, c.delimiter)

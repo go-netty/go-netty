@@ -39,7 +39,7 @@ func TestVariableLengthCodec(t *testing.T) {
 	for index, c := range cases {
 		codec := VariableLengthCodec(c.maxReadLen)
 		t.Run(fmt.Sprint(codec.CodecName(), "#", index), func(t *testing.T) {
-			ctx := netty.MockHandlerContext{
+			ctx := MockHandlerContext{
 				MockHandleRead: func(message netty.Message) {
 					if dst := utils.MustToBytes(message); !bytes.Equal(dst, c.input) {
 						t.Fatalf("%v != %v", dst, c.input)
