@@ -292,25 +292,27 @@ func (r *readIdleHandler) HandleInactive(ctx InactiveContext, ex Exception) {
 
 func (r *readIdleHandler) onReadTimeout() {
 
-	var expired = false
+	var expired bool
+	var ctx HandlerContext
 
 	r.withReadLock(func() {
 		// check if the idle time expires.
 		expired = time.Since(r.lastReadTime) >= r.idleTime
+		ctx = r.handlerCtx
 	})
 
-	if expired {
+	if expired && ctx != nil {
 		// trigger event.
 		func() {
 			// capture exception.
 			defer func() {
 				if err := recover(); nil != err {
-					r.handlerCtx.Channel().Pipeline().fireChannelException(AsException(err, debug.Stack()))
+					ctx.Channel().Pipeline().fireChannelException(AsException(err, debug.Stack()))
 				}
 			}()
 
 			// trigger ReadIdleEvent.
-			r.handlerCtx.Trigger(ReadIdleEvent{})
+			ctx.Trigger(ReadIdleEvent{})
 		}()
 	}
 
@@ -389,26 +391,28 @@ func (w *writeIdleHandler) HandleInactive(ctx InactiveContext, ex Exception) {
 
 func (w *writeIdleHandler) onWriteTimeout() {
 
-	var expired = false
+	var expired bool
+	var ctx HandlerContext
 
 	w.withReadLock(func() {
 		// check if the idle time expires.
 		expired = time.Since(w.lastWriteTime) >= w.idleTime
+		ctx = w.handlerCtx
 	})
 
 	// check if the idle time expires
-	if expired {
+	if expired && ctx != nil {
 		// trigger event.
 		func() {
 			// capture exception
 			defer func() {
 				if err := recover(); nil != err {
-					w.handlerCtx.Channel().Pipeline().fireChannelException(AsException(err, debug.Stack()))
+					ctx.Channel().Pipeline().fireChannelException(AsException(err, debug.Stack()))
 				}
 			}()
 
 			// trigger WriteIdleEvent.
-			w.handlerCtx.Trigger(WriteIdleEvent{})
+			ctx.Trigger(WriteIdleEvent{})
 		}()
 	}
 
