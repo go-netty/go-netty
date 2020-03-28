@@ -46,8 +46,24 @@ func TestPipeline(t *testing.T) {
 		t.Fatal("headHandler / tailHandler")
 	}
 
-	pipeline.AddLast(twoHandler{})
+	pipeline.AddHandler(-1, twoHandler{})
 	pipeline.AddFirst(oneHandler{})
+
+	if -1 != pipeline.IndexOf(func(handler Handler) bool {
+		return false
+	}) {
+		t.Fatal("unexpected index")
+	}
+
+	if -1 != pipeline.LastIndexOf(func(handler Handler) bool {
+		return false
+	}) {
+		t.Fatal("unexpected index")
+	}
+
+	if nil != pipeline.ContextAt(-1) {
+		t.Fatal("unexpected result")
+	}
 
 	twoIndex := pipeline.IndexOf(func(handler Handler) bool {
 		_, ok := handler.(twoHandler)
@@ -65,23 +81,23 @@ func TestPipeline(t *testing.T) {
 		switch handler.(type) {
 		case oneHandler:
 			if 1 != i {
-				t.Fatal("unexpect position: ", i, "want: ", 1)
+				t.Fatal("unexpected position: ", i, "want: ", 1)
 			}
 		case twoHandler:
 			if 2 != i {
-				t.Fatal("unexpect position: ", i, "want: ", 2)
+				t.Fatal("unexpected position: ", i, "want: ", 2)
 			}
 		case threeHandler:
 			if 3 != i {
-				t.Fatal("unexpect position: ", i, "want: ", 3)
+				t.Fatal("unexpected position: ", i, "want: ", 3)
 			}
 		case fourHandler:
 			if 4 != i {
-				t.Fatal("unexpect position: ", i, "want: ", 4)
+				t.Fatal("unexpected position: ", i, "want: ", 4)
 			}
 		case fiveHandler:
 			if 5 != i {
-				t.Fatal("unexpect position: ", i, "want: ", 5)
+				t.Fatal("unexpected position: ", i, "want: ", 5)
 			}
 		default:
 			t.Fatal("invalid handler")
