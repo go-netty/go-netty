@@ -188,12 +188,19 @@ func (c *channel) serveChannel() {
 func (c *channel) readLoop() {
 
 	defer func() {
-		c.postCloseEvent(AsException(recover(), debug.Stack()))
+		if err := recover(); nil != err {
+			c.postCloseEvent(AsException(err, debug.Stack()))
+		}
 	}()
 
 	for {
-		// 循环读取数据，直到连接关闭
-		c.pipeline.fireChannelRead(c.transport)
+		select {
+		case <-c.ctx.Done():
+			_ = c.Close()
+			return
+		default:
+			c.pipeline.fireChannelRead(c.transport)
+		}
 	}
 }
 
@@ -246,7 +253,7 @@ func (c *channel) writeLoop() {
 			// flush buffer
 			utils.Assert(c.transport.Flush())
 		case <-c.ctx.Done():
-			c.Close()
+			_ = c.Close()
 			return
 		}
 	}
