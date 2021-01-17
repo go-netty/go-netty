@@ -51,15 +51,15 @@ type Pipeline interface {
 	Channel() Channel
 
 	// serve the channel.
-	serveChannel(channel Channel)
+	ServeChannel(channel Channel)
 
 	// internal use.
-	fireChannelActive()
-	fireChannelRead(message Message)
-	fireChannelWrite(message Message)
-	fireChannelException(ex Exception)
-	fireChannelInactive(ex Exception)
-	fireChannelEvent(event Event)
+	FireChannelActive()
+	FireChannelRead(message Message)
+	FireChannelWrite(message Message)
+	FireChannelException(ex Exception)
+	FireChannelInactive(ex Exception)
+	FireChannelEvent(event Event)
 }
 
 // NewPipeline convert to PipelineFactory
@@ -245,48 +245,48 @@ func (p *pipeline) Channel() Channel {
 }
 
 // serveChannel to serve the channel
-func (p *pipeline) serveChannel(channel Channel) {
+func (p *pipeline) ServeChannel(channel Channel) {
 
 	utils.AssertIf(nil != p.channel, "already attached channel")
 	p.channel = channel
 
 	defer func() {
 		if err := recover(); nil != err {
-			p.fireChannelException(AsException(err, debug.Stack()))
+			p.FireChannelException(AsException(err, debug.Stack()))
 		}
 	}()
 
-	p.fireChannelActive()
+	p.FireChannelActive()
 	p.channel.serveChannel()
 }
 
 // fireChannelActive
-func (p *pipeline) fireChannelActive() {
+func (p *pipeline) FireChannelActive() {
 	p.head.HandleActive()
 }
 
 // fireChannelRead
-func (p *pipeline) fireChannelRead(message Message) {
+func (p *pipeline) FireChannelRead(message Message) {
 	p.head.HandleRead(message)
 }
 
 // fireChannelWrite
-func (p *pipeline) fireChannelWrite(message Message) {
+func (p *pipeline) FireChannelWrite(message Message) {
 	p.tail.HandleWrite(message)
 }
 
 // fireChannelException
-func (p *pipeline) fireChannelException(ex Exception) {
+func (p *pipeline) FireChannelException(ex Exception) {
 	p.head.HandleException(ex)
 }
 
 // fireChannelInactive
-func (p *pipeline) fireChannelInactive(ex Exception) {
+func (p *pipeline) FireChannelInactive(ex Exception) {
 	p.tail.HandleInactive(ex)
 }
 
 // fireChannelEvent
-func (p *pipeline) fireChannelEvent(event Event) {
+func (p *pipeline) FireChannelEvent(event Event) {
 	p.head.HandleEvent(event)
 }
 

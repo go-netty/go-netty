@@ -199,7 +199,7 @@ func (c *channel) readLoop() {
 			_ = c.Close()
 			return
 		default:
-			c.pipeline.fireChannelRead(c.transport)
+			c.pipeline.FireChannelRead(c.transport)
 		}
 	}
 }
@@ -265,7 +265,7 @@ func (c *channel) postCloseEvent(ex Exception) {
 		// 主动关闭的不需要触发异常流程
 		// 非主动关闭需要投递异常事件
 		if 0 == atomic.LoadInt32(&c.closed) {
-			c.pipeline.fireChannelException(ex)
+			c.pipeline.FireChannelException(ex)
 		}
 	}
 }

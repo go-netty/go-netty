@@ -25,40 +25,75 @@ import (
 
 // ChannelExecutor defines an executor
 type ChannelExecutor interface {
-	InboundHandler
 }
 
 // NewFixedChannelExecutor create a fixed number of coroutines for event processing
 func NewFixedChannelExecutor(taskCap int, workerNum int) ChannelExecutorFactory {
 	return func(ctx context.Context) ChannelExecutor {
-		return &channelExecutor{WorkerPool: utils.NewWorkerPool(ctx, taskCap, workerNum, workerNum)}
+		return &channelExecutor{worker: utils.NewWorkerPool(ctx, taskCap, workerNum, workerNum)}
 	}
 }
 
 // NewFlexibleChannelExecutor create a flexible number of coroutine event processing, allowing setting maximum
 func NewFlexibleChannelExecutor(taskCap int, idleWorker, maxWorker int) ChannelExecutorFactory {
 	return func(ctx context.Context) ChannelExecutor {
-		return &channelExecutor{WorkerPool: utils.NewWorkerPool(ctx, taskCap, idleWorker, maxWorker)}
+		return &channelExecutor{worker: utils.NewWorkerPool(ctx, taskCap, idleWorker, maxWorker)}
 	}
 }
 
 // channelExecutor impl ChannelExecutor
 type channelExecutor struct {
-	utils.WorkerPool
+	worker utils.WorkerPool
 }
 
-func (ce *channelExecutor) HandleRead(ctx InboundContext, message Message) {
+func(ce *channelExecutor) execute(ctx HandlerContext, task func()) {
 
-	ce.AddTask(func() {
-
+	ce.worker.AddTask(func() {
 		// capture exception
 		defer func() {
 			if err := recover(); nil != err {
-				ctx.Channel().Pipeline().fireChannelException(AsException(err, debug.Stack()))
+				ctx.Channel().Pipeline().FireChannelException(AsException(err, debug.Stack()))
 			}
 		}()
 
-		// do HandleRead
+		// do task
+		task()
+	})
+}
+
+func (ce *channelExecutor) HandleActive(ctx ActiveContext) {
+	ce.execute(ctx, func() {
+		ctx.HandleActive()
+	})
+}
+
+func (ce *channelExecutor) HandleRead(ctx InboundContext, message Message) {
+	ce.execute(ctx, func() {
 		ctx.HandleRead(message)
 	})
 }
+
+/*func (ce *channelExecutor) HandleWrite(ctx OutboundContext, message Message) {
+	panic("implement me")
+}*/
+
+func (ce *channelExecutor) HandleException(ctx ExceptionContext, ex Exception) {
+	ce.execute(ctx, func() {
+		ctx.HandleException(ex)
+	})
+}
+
+func (ce *channelExecutor) HandleInactive(ctx InactiveContext, ex Exception) {
+	ce.execute(ctx, func() {
+		ctx.HandleInactive(ex)
+	})
+}
+
+func (ce *channelExecutor) HandleEvent(ctx EventContext, event Event) {
+	ce.execute(ctx, func() {
+		ctx.HandleEvent(event)
+	})
+}
+
+
+

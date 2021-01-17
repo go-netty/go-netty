@@ -146,7 +146,7 @@ func (b *bootstrap) serveChannel(channelExecutor ChannelExecutor, channel Channe
 	}
 
 	// serve channel.
-	channel.Pipeline().serveChannel(channel)
+	channel.Pipeline().ServeChannel(channel)
 }
 
 // serveTransport to serve channel

@@ -307,7 +307,7 @@ func (r *readIdleHandler) onReadTimeout() {
 			// capture exception.
 			defer func() {
 				if err := recover(); nil != err {
-					ctx.Channel().Pipeline().fireChannelException(AsException(err, debug.Stack()))
+					ctx.Channel().Pipeline().FireChannelException(AsException(err, debug.Stack()))
 				}
 			}()
 
@@ -407,7 +407,7 @@ func (w *writeIdleHandler) onWriteTimeout() {
 			// capture exception
 			defer func() {
 				if err := recover(); nil != err {
-					ctx.Channel().Pipeline().fireChannelException(AsException(err, debug.Stack()))
+					ctx.Channel().Pipeline().FireChannelException(AsException(err, debug.Stack()))
 				}
 			}()
 
