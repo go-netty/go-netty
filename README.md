@@ -33,7 +33,6 @@ go-netty is heavily inspired by [netty](https://github.com/netty/netty)
 
 ## Documentation
 * [GoDoc](https://godoc.org/github.com/go-netty/go-netty)
-* [Go-Netty.com](https://go-netty.com)
 
 ## Examples
 
@@ -49,78 +48,64 @@ package main
 
 import (
 	"fmt"
-	"os"
 	"strings"
 
 	"github.com/go-netty/go-netty"
 	"github.com/go-netty/go-netty/codec/format"
 	"github.com/go-netty/go-netty/codec/frame"
-	"github.com/go-netty/go-netty/transport/tcp"
 )
 
 func main() {
+	// child pipeline initializer
+	var childInitializer = func(channel netty.Channel) {
+		channel.Pipeline().
+			// the maximum allowable packet length is 128 bytes，use \n to split, strip delimiter
+			AddLast(frame.DelimiterCodec(128, "\n", true)).
+			// convert to string
+			AddLast(format.TextCodec()).
+			// LoggerHandler, print connected/disconnected event and received messages
+			AddLast(LoggerHandler{}).
+			// UpperHandler (string to upper case)
+			AddLast(UpperHandler{})
+	}
 
-    // child pipeline initializer
-    var childPipelineInitializer = func(channel netty.Channel) {
-        channel.Pipeline().
-            // the maximum allowable packet length is 128 bytes，use \n to splite, strip delimiter
-            AddLast(frame.DelimiterCodec(128, "\n", true)).
-            // convert to string
-            AddLast(format.TextCodec()).
-            // LoggerHandler, print connected/disconnected event and received messages
-            AddLast(LoggerHandler{}).
-            // UpperHandler (string to upper case)
-            AddLast(UpperHandler{})
-    }
-
-    // new go-netty bootstrap
-    netty.NewBootstrap().
-        // configure the child pipeline initializer
-        ChildInitializer(childPipelineInitializer).
-        // configure the transport protocol
-        Transport(tcp.New()).
-        // configure the listening address
-        Listen("0.0.0.0:9527").
-        // waiting for exit signal
-        Action(netty.WaitSignal(os.Interrupt)).
-        // print exit message
-        Action(func(bs netty.Bootstrap) {
-            fmt.Println("server exited")
-        })
+	// create bootstrap & listening & accepting
+	netty.NewBootstrap(netty.WithChildInitializer(childInitializer)).
+		Listen(":9527").Sync()
 }
 
 type LoggerHandler struct {}
 
 func (LoggerHandler) HandleActive(ctx netty.ActiveContext) {
-    fmt.Println("go-netty:", "->", "active:", ctx.Channel().RemoteAddr())
-    // write welcome message
-    ctx.Write("Hello I'm " + "go-netty")
+	fmt.Println("go-netty:", "->", "active:", ctx.Channel().RemoteAddr())
+	// write welcome message
+	ctx.Write("Hello I'm " + "go-netty")
 }
 
 func (LoggerHandler) HandleRead(ctx netty.InboundContext, message netty.Message) {
-    fmt.Println("go-netty:", "->", "handle read:", message)
-    // leave it to the next handler(UpperHandler)
-    ctx.HandleRead(message)
+	fmt.Println("go-netty:", "->", "handle read:", message)
+	// leave it to the next handler(UpperHandler)
+	ctx.HandleRead(message)
 }
 
 func (LoggerHandler) HandleInactive(ctx netty.InactiveContext, ex netty.Exception) {
-    fmt.Println("go-netty:", "->", "inactive:", ctx.Channel().RemoteAddr(), ex)
-    // disconnected，the default processing is to close the connection
-    ctx.HandleInactive(ex)
+	fmt.Println("go-netty:", "->", "inactive:", ctx.Channel().RemoteAddr(), ex)
+	// disconnected，the default processing is to close the connection
+	ctx.HandleInactive(ex)
 }
 
 type UpperHandler struct {}
 
 func (UpperHandler) HandleRead(ctx netty.InboundContext, message netty.Message) {
-    // text to upper case
-    text := message.(string)
-    upText := strings.ToUpper(text)
-    // write the result to the client
-    ctx.Write(text + " -> " + upText)
+	// text to upper case
+	text := message.(string)
+	upText := strings.ToUpper(text)
+	// write the result to the client
+	ctx.Write(text + " -> " + upText)
 }
 ```
 
-using <code>Netcat</code> to send message  
+use <code>Netcat</code> to send message  
 ```bash
 $ echo -n -e "Hello Go-Netty\nhttps://go-netty.com\n" | nc 127.0.0.1 9527
 Hello I'm go-netty

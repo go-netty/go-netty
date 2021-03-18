@@ -34,8 +34,6 @@ type (
 	TransportFactory transport.Factory
 	// ChannelIDFactory to create channel id
 	ChannelIDFactory func() int64
-	// ChannelExecutorFactory to create executor
-	ChannelExecutorFactory func(ctx context.Context) ChannelExecutor
 
 	// bootstrapOptions
 	bootstrapOptions struct {
@@ -46,7 +44,6 @@ type (
 		transportFactory  TransportFactory
 		channelFactory    ChannelFactory
 		pipelineFactory   PipelineFactory
-		executorFactory   ChannelExecutorFactory
 		channelIDFactory  ChannelIDFactory
 	}
 )
@@ -56,5 +53,56 @@ func SequenceID() ChannelIDFactory {
 	var id int64
 	return func() int64 {
 		return atomic.AddInt64(&id, 1)
+	}
+}
+
+type Option func(options *bootstrapOptions)
+
+// WithContext fork child context with context.WithCancel
+func WithContext(ctx context.Context) Option {
+	return func(options *bootstrapOptions) {
+		options.bootstrapCtx, options.bootstrapCancel = context.WithCancel(ctx)
+	}
+}
+
+// WithChannelID to set ChannelIDFactory
+func WithChannelID(channelIDFactory ChannelIDFactory) Option {
+	return func(options *bootstrapOptions) {
+		options.channelIDFactory = channelIDFactory
+	}
+}
+
+// WithPipeline to set PipelineFactory
+func WithPipeline(pipelineFactory PipelineFactory) Option {
+	return func(options *bootstrapOptions) {
+		options.pipelineFactory = pipelineFactory
+	}
+}
+
+// WithChannel to set ChannelFactory
+func WithChannel(channelFactory ChannelFactory) Option {
+	return func(options *bootstrapOptions) {
+		options.channelFactory = channelFactory
+	}
+}
+
+// WithTransport to set TransportFactory
+func WithTransport(transportFactory TransportFactory) Option {
+	return func(options *bootstrapOptions) {
+		options.transportFactory = transportFactory
+	}
+}
+
+// WithChildInitializer to set server side ChannelInitializer
+func WithChildInitializer(initializer ChannelInitializer) Option {
+	return func(options *bootstrapOptions) {
+		options.childInitializer = initializer
+	}
+}
+
+// WithClientInitializer to set client side ChannelInitializer
+func WithClientInitializer(initializer ChannelInitializer) Option {
+	return func(options *bootstrapOptions) {
+		options.clientInitializer = initializer
 	}
 }

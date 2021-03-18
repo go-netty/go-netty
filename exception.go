@@ -39,6 +39,8 @@ type Exception interface {
 func AsException(e interface{}, stack []byte) Exception {
 
 	switch err := e.(type) {
+	case nil:
+		return nil
 	case error:
 		return exception{error: err, stack: stack}
 	default:

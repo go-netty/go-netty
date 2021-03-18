@@ -18,7 +18,6 @@ package netty
 
 import (
 	"fmt"
-	"runtime/debug"
 
 	"github.com/go-netty/go-netty/utils"
 )
@@ -249,14 +248,6 @@ func (p *pipeline) ServeChannel(channel Channel) {
 
 	utils.AssertIf(nil != p.channel, "already attached channel")
 	p.channel = channel
-
-	defer func() {
-		if err := recover(); nil != err {
-			p.FireChannelException(AsException(err, debug.Stack()))
-		}
-	}()
-
-	p.FireChannelActive()
 	p.channel.serveChannel()
 }
 

@@ -17,7 +17,6 @@
 package tcp
 
 import (
-	"errors"
 	"net"
 
 	"github.com/go-netty/go-netty/transport"
@@ -28,10 +27,7 @@ func New() transport.Factory {
 	return new(tcpFactory)
 }
 
-type tcpFactory struct {
-	listener *net.TCPListener
-	options  *Options
-}
+type tcpFactory struct{}
 
 func (*tcpFactory) Schemes() transport.Schemes {
 	return transport.Schemes{"tcp", "tcp4", "tcp6"}
@@ -60,35 +56,33 @@ func (f *tcpFactory) Listen(options *transport.Options) (transport.Acceptor, err
 		return nil, err
 	}
 
-	_ = f.Close()
-
 	l, err := net.Listen(options.Address.Scheme, options.AddressWithoutHost())
 	if nil != err {
 		return nil, err
 	}
 
-	f.listener = l.(*net.TCPListener)
-	f.options = FromContext(options.Context, DefaultOption)
-	return f, nil
+	return &tcpAcceptor{listener: l.(*net.TCPListener), options: FromContext(options.Context, DefaultOption)}, nil
 }
 
-func (f *tcpFactory) Accept() (transport.Transport, error) {
-	if nil == f.listener {
-		return nil, errors.New("no listener")
-	}
+type tcpAcceptor struct {
+	listener *net.TCPListener
+	options  *Options
+}
 
-	conn, err := f.listener.AcceptTCP()
+func (t *tcpAcceptor) Accept() (transport.Transport, error) {
+
+	conn, err := t.listener.AcceptTCP()
 	if nil != err {
 		return nil, err
 	}
 
-	return (&tcpTransport{TCPConn: conn}).applyOptions(f.options, false)
+	return (&tcpTransport{TCPConn: conn}).applyOptions(t.options, false)
 }
 
-func (f *tcpFactory) Close() error {
-	if f.listener != nil {
-		defer func() { f.listener = nil }()
-		return f.listener.Close()
+func (t *tcpAcceptor) Close() error {
+	if t.listener != nil {
+		defer func() { t.listener = nil }()
+		return t.listener.Close()
 	}
 	return nil
 }

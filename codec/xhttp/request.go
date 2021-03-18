@@ -49,7 +49,7 @@ func (*requestCodec) HandleWrite(ctx netty.OutboundContext, message netty.Messag
 	case *http.Request:
 		buffer := bytes.NewBuffer(nil)
 		utils.Assert(r.Write(buffer))
-		ctx.HandleWrite(buffer)
+		ctx.HandleWrite(buffer.Bytes())
 	default:
 		ctx.HandleWrite(message)
 	}

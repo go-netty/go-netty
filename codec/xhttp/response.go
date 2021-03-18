@@ -44,12 +44,11 @@ func (*responseCodec) HandleWrite(ctx netty.OutboundContext, message netty.Messa
 	case *http.Response:
 		buffer := bytes.NewBuffer(nil)
 		utils.Assert(r.Write(buffer))
-		ctx.HandleWrite(buffer)
+		ctx.HandleWrite(buffer.Bytes())
 	case *responseWriter:
-		response := r.response()
 		buffer := bytes.NewBuffer(nil)
-		utils.Assert(response.Write(buffer))
-		ctx.HandleWrite(buffer)
+		utils.Assert(r.response().Write(buffer))
+		ctx.HandleWrite(buffer.Bytes())
 	default:
 		utils.Assert(fmt.Errorf("unrecognized type: %T", message))
 	}

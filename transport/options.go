@@ -57,13 +57,13 @@ func (lo *Options) Apply(options ...Option) error {
 }
 
 // ParseOptions parse options
-func ParseOptions(options ...Option) (*Options, error) {
-	option := &Options{Context: context.Background()}
-	return option, option.Apply(options...)
+func ParseOptions(ctx context.Context, url string, options ...Option) (*Options, error) {
+	option := &Options{Context: ctx}
+	return option, option.Apply(append([]Option{withAddress(url)}, options...)...)
 }
 
-// WithAddress for server listener or client dialer
-func WithAddress(address string) Option {
+// withAddress for server listener or client dialer
+func withAddress(address string) Option {
 	return func(options *Options) (err error) {
 		if options.Address, err = url.Parse(address); nil != err {
 			// compatible host:port

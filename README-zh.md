@@ -30,7 +30,6 @@ go-netty 是一款受netty启发的Go语言可扩展的高性能网络库
 
 ## 文档
 * [GoDoc](https://godoc.org/github.com/go-netty/go-netty)
-* [Go-Netty.com](https://go-netty.com)
 
 ## 示例
 
@@ -46,19 +45,17 @@ package main
 
 import (
 	"fmt"
-	"os"
 	"strings"
 
 	"github.com/go-netty/go-netty"
 	"github.com/go-netty/go-netty/codec/format"
 	"github.com/go-netty/go-netty/codec/frame"
-	"github.com/go-netty/go-netty/transport/tcp"
 )
 
 func main() {
 
     // 子连接的流水线配置
-    var childPipelineInitializer = func(channel netty.Channel) {
+    var childInitializer = func(channel netty.Channel) {
         channel.Pipeline().
             // 最大允许包长128字节，使用\n分割包, 丢弃分隔符
             AddLast(frame.DelimiterCodec(128, "\n", true)).
@@ -70,20 +67,9 @@ func main() {
             AddLast(UpperHandler{})
     }
 
-    // 配置服务器
-    netty.NewBootstrap().
-        // 配置子链接的流水线配置
-        ChildInitializer(childPipelineInitializer).
-        // 配置传输使用的方式
-        Transport(tcp.New()).
-        // 配置监听地址
-        Listen("0.0.0.0:9527").
-        // 等待退出信号
-        Action(netty.WaitSignal(os.Interrupt)).
-        // 打印退出消息
-        Action(func(bs netty.Bootstrap) {
-            fmt.Println("server exited")
-        })
+	// 创建Bootstrap & 监听端口 & 接受连接
+	netty.NewBootstrap(netty.WithChildInitializer(childInitializer)).
+		Listen(":9527").Sync()
 }
 
 type LoggerHandler struct {}

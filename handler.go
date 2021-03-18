@@ -170,14 +170,12 @@ func (*headHandler) HandleWrite(ctx OutboundContext, message Message) {
 
 	switch m := message.(type) {
 	case []byte:
-		_, _ = ctx.Channel().Write(m)
+		_, _ = ctx.Channel().Writev([][]byte{m})
 	case [][]byte:
 		_, _ = ctx.Channel().Writev(m)
-	case io.WriterTo:
-		_, _ = m.WriteTo(ctx.Channel())
 	case io.Reader:
 		data := utils.AssertBytes(ioutil.ReadAll(m))
-		_, _ = ctx.Channel().Write(data)
+		_, _ = ctx.Channel().Writev([][]byte{data})
 	default:
 		utils.Assert(fmt.Errorf("unsupported type: %T", m))
 	}

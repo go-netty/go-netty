@@ -48,23 +48,29 @@ func TestBootstrap(t *testing.T) {
 		SockBuf:         1024,
 	}
 
-	bootstrap := NewBootstrap()
-	bootstrap.Channel(NewBufferedChannel(128, 1024))
-	bootstrap.ChildInitializer(pipelineInitializer).ClientInitializer(pipelineInitializer)
-	bootstrap.ChannelExecutor(NewFixedChannelExecutor(128, 1))
-	bootstrap.Transport(tcp.New())
-	bootstrap.Listen("127.0.0.1:9527", tcp.WithOptions(tcpOptions))
+	bootstrap := NewBootstrap(
+		WithChannel(NewBufferedChannel(128, 1024)),
+		WithChildInitializer(pipelineInitializer),
+		WithClientInitializer(pipelineInitializer),
+		WithTransport(tcp.New()),
+	)
 
-	_, err := bootstrap.Connect("tcp://127.0.0.1:9527", "go-netty")
+	bootstrap.Listen("127.0.0.1:9527", tcp.WithOptions(tcpOptions)).Async(func(err error) {
+		if nil != err && !strings.Contains(err.Error(), "use of closed network connection") {
+			t.Fatal(err)
+		}
+	})
+
+	channel, err := bootstrap.Connect("tcp://127.0.0.1:9527", "go-netty")
 	if nil != err {
 		t.Fatal(err)
 	}
 
-	bootstrap.Action(func(b Bootstrap) {
-		time.Sleep(time.Second * 3)
-		b.Stop()
-		time.Sleep(time.Second * 1)
-	})
+	channel.Write("https://go-netty.com")
+
+	time.Sleep(time.Second * 3)
+	bootstrap.Shutdown()
+	time.Sleep(time.Second)
 }
 
 type eventHandler struct {
@@ -75,12 +81,12 @@ func (e *eventHandler) HandleEvent(ctx EventContext, event Event) {
 
 	switch event.(type) {
 	case ReadIdleEvent:
-		fmt.Println("read idle event")
+		fmt.Println("read idle event", " isActive: ", ctx.Channel().IsActive())
 		if 2 == atomic.AddInt32(&e.idleEvent, 1) {
 			panic("read/write idle")
 		}
 	case WriteIdleEvent:
-		fmt.Println("write idle event")
+		fmt.Println("write idle event", " isActive: ", ctx.Channel().IsActive())
 		if 2 == atomic.AddInt32(&e.idleEvent, 1) {
 			panic("read/write idle")
 		}
@@ -93,36 +99,35 @@ type echoHandler struct {
 }
 
 func (e echoHandler) HandleActive(ctx ActiveContext) {
-	fmt.Println("active: ", ctx.Channel().ID(), ctx.Channel().LocalAddr(), "->", ctx.Channel().RemoteAddr())
-	ctx.Write("hello go-netty")
-	ctx.Write([]byte("website: https://go-netty.com"))
-	ctx.HandleActive()
+	fmt.Println("active: ", ctx.Channel().ID(), ctx.Channel().LocalAddr(), "->", ctx.Channel().RemoteAddr(), " isActive: ", ctx.Channel().IsActive())
 
 	ctx.SetAttachment("https://go-netty.com")
 	if ctx.Attachment().(string) != "https://go-netty.com" {
 		panic("set attachment fail")
 	}
+
+	ctx.HandleActive()
 }
 
 func (e echoHandler) HandleRead(ctx InboundContext, message Message) {
-	fmt.Println("read: ", ctx.Channel().ID(), message)
+	fmt.Println("read: ", ctx.Channel().ID(), message, " isActive: ", ctx.Channel().IsActive())
 	ctx.HandleRead(message)
 }
 
 func (e echoHandler) HandleWrite(ctx OutboundContext, message Message) {
-	fmt.Println("write: ", ctx.Channel().ID(), message)
+	fmt.Println("write: ", ctx.Channel().ID(), message, " isActive: ", ctx.Channel().IsActive())
 	ctx.HandleWrite(message)
 }
 
 func (e echoHandler) HandleException(ctx ExceptionContext, ex Exception) {
-	fmt.Println("exception: ", ctx.Channel().ID(), ex)
+	fmt.Println("exception: ", ctx.Channel().ID(), ex, " isActive: ", ctx.Channel().IsActive())
 	stackBuffer := bytes.NewBuffer(nil)
 	ex.PrintStackTrace(stackBuffer)
 	ctx.HandleException(ex)
 }
 
 func (e echoHandler) HandleInactive(ctx InactiveContext, ex Exception) {
-	fmt.Println("inactive: ", ctx.Channel().ID(), ex.Unwrap())
+	fmt.Println("inactive: ", ctx.Channel().ID(), ex, " isActive: ", ctx.Channel().IsActive())
 	ctx.HandleInactive(ex)
 }
 

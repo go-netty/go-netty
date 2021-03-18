@@ -18,15 +18,18 @@ package xhttp
 
 import (
 	"bytes"
-	"github.com/go-netty/go-netty"
-	"github.com/go-netty/go-netty/transport/tcp"
 	"io/ioutil"
 	"net/http"
+	"strings"
 	"sync"
 	"testing"
+
+	"github.com/go-netty/go-netty"
 )
 
 func TestServerCodec(t *testing.T) {
+
+	var wg = sync.WaitGroup{}
 
 	var httpMessage = []byte("hello go-netty")
 
@@ -35,26 +38,16 @@ func TestServerCodec(t *testing.T) {
 		writer.Write(httpMessage)
 	})
 
-	var bootstrap = netty.NewBootstrap()
-
-	bootstrap.ChildInitializer(func(channel netty.Channel) {
+	var childInitializer = func(channel netty.Channel) {
 		channel.Pipeline().
 			AddLast(ServerCodec()).
 			AddLast(Handler(httpMux))
-	})
+	}
 
-	wg := sync.WaitGroup{}
-	wg.Add(1)
-
-	bootstrap.ClientInitializer(func(channel netty.Channel) {
+	var clientInitializer = func(channel netty.Channel) {
 		channel.Pipeline().
 			AddLast(ClientCodec()).
 			AddLast(netty.ActiveHandlerFunc(func(ctx netty.ActiveContext) {
-				request, err := http.NewRequest("GET", "http://127.0.0.1:9526/test", nil)
-				if nil != err {
-					t.Fatal(err)
-				}
-				ctx.Write(request)
 				ctx.HandleActive()
 			})).
 			AddLast(netty.InboundHandlerFunc(func(ctx netty.InboundContext, message netty.Message) {
@@ -70,13 +63,30 @@ func TestServerCodec(t *testing.T) {
 				}
 				ctx.HandleRead(message)
 			}))
+	}
+
+	var bootstrap = netty.NewBootstrap(netty.WithChildInitializer(childInitializer), netty.WithClientInitializer(clientInitializer))
+
+	bootstrap.Listen("127.0.0.1:9526").Async(func(err error) {
+		if nil != err && !strings.Contains(err.Error(), "use of closed network connection") {
+			t.Fatal(err)
+		}
 	})
 
-	bootstrap.Transport(tcp.New()).Listen("127.0.0.1:9526")
+	wg.Add(1)
 
-	if _, err := bootstrap.Connect("127.0.0.1:9526", nil); nil != err {
+	channel, err := bootstrap.Connect("127.0.0.1:9526", nil)
+	if nil != err {
 		t.Fatal(err)
 	}
 
+	request, err := http.NewRequest("GET", "http://127.0.0.1:9526/test", nil)
+	if nil != err {
+		t.Fatal(err)
+	}
+
+	channel.Write(request)
+
 	wg.Wait()
+	bootstrap.Shutdown()
 }

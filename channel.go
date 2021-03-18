@@ -19,9 +19,9 @@ package netty
 import (
 	"context"
 	"errors"
-	"io"
 	"net"
 	"runtime/debug"
+	"sync"
 	"sync/atomic"
 
 	"github.com/go-netty/go-netty/transport"
@@ -33,8 +33,14 @@ type Channel interface {
 	// Channel id
 	ID() int64
 
-	// reader & writer & closer
-	io.WriteCloser
+	// Close through the Pipeline
+	Close() error
+
+	// Return true if the Channel is active and so connected
+	IsActive() bool
+
+	// Write message through the Pipeline
+	Write(Message) bool
 
 	// Writev to write [][]byte for optimize syscall
 	Writev([][]byte) (int64, error)
@@ -94,14 +100,15 @@ func newChannelWith(ctx context.Context, pipeline Pipeline, transport transport.
 
 // implement of Channel
 type channel struct {
-	id             int64
-	ctx            context.Context
-	cancel         context.CancelFunc
-	transport      transport.Transport
-	pipeline       Pipeline
-	attachment     Attachment
-	sendQueue      chan [][]byte
-	closed, posted int32
+	id         int64
+	ctx        context.Context
+	cancel     context.CancelFunc
+	transport  transport.Transport
+	pipeline   Pipeline
+	attachment Attachment
+	sendQueue  chan [][]byte
+	wait       sync.WaitGroup
+	closed     int32
 }
 
 // Get channel id
@@ -109,14 +116,15 @@ func (c *channel) ID() int64 {
 	return c.id
 }
 
-// Write bytes to the channel
-func (c *channel) Write(p []byte) (n int, err error) {
+// Write message through the Pipeline
+func (c *channel) Write(message Message) bool {
 
 	select {
 	case <-c.ctx.Done():
-		return 0, errors.New("broken pipe")
-	case c.sendQueue <- [][]byte{p}:
-		return len(p), nil
+		return false
+	default:
+		c.pipeline.FireChannelWrite(message)
+		return true
 	}
 }
 
@@ -134,13 +142,18 @@ func (c *channel) Writev(p [][]byte) (n int64, err error) {
 	}
 }
 
-// Close the channel
+// Close through the Pipeline
 func (c *channel) Close() error {
 	if atomic.CompareAndSwapInt32(&c.closed, 0, 1) {
 		c.cancel()
 		return c.transport.Close()
 	}
 	return nil
+}
+
+// Return true if the Channel is active and so connected
+func (c *channel) IsActive() bool {
+	return 0 == atomic.LoadInt32(&c.closed)
 }
 
 // Get transport of channel
@@ -180,26 +193,41 @@ func (c *channel) Context() context.Context {
 
 // start write & read routines
 func (c *channel) serveChannel() {
-	go c.writeLoop()
+	c.wait.Add(1)
 	go c.readLoop()
+	go c.writeLoop()
+	c.wait.Wait()
+}
+
+func (c *channel) invokeMethod(fn func()) {
+
+	defer func() {
+		if err := recover(); nil != err && 0 == atomic.LoadInt32(&c.closed) {
+			c.pipeline.FireChannelException(AsException(err, debug.Stack()))
+		}
+	}()
+
+	fn()
 }
 
 // reading message of channel
 func (c *channel) readLoop() {
 
 	defer func() {
-		if err := recover(); nil != err {
-			c.postCloseEvent(AsException(err, debug.Stack()))
-		}
+		c.postCloseEvent(AsException(recover(), debug.Stack()))
+	}()
+
+	func() {
+		defer c.wait.Done()
+		c.invokeMethod(c.pipeline.FireChannelActive)
 	}()
 
 	for {
 		select {
 		case <-c.ctx.Done():
-			_ = c.Close()
 			return
 		default:
-			c.pipeline.FireChannelRead(c.transport)
+			c.invokeMethod(func() { c.pipeline.FireChannelRead(c.transport) })
 		}
 	}
 }
@@ -213,34 +241,34 @@ func (c *channel) writeLoop() {
 		}
 	}()
 
-	var BufferCap = cap(c.sendQueue)
-	var buffers = make(net.Buffers, 0, BufferCap)
-	var indexes = make([]int, 0, BufferCap)
+	var bufferCap = cap(c.sendQueue)
+	var buffers = make(net.Buffers, 0, bufferCap)
+	var indexes = make([]int, 0, bufferCap)
 
 	// Try to combine packet sending to optimize sending performance
 	sendWithWritev := func(data [][]byte, queue <-chan [][]byte) (int64, error) {
 
 		// reuse buffer.
-		buffers = buffers[:0]
-		indexes = indexes[:0]
+		sendBuffers := buffers[:0]
+		sendIndexes := indexes[:0]
 
 		// append first packet.
-		buffers = append(buffers, data...)
-		indexes = append(indexes, len(buffers))
+		sendBuffers = append(sendBuffers, data...)
+		sendIndexes = append(sendIndexes, len(sendBuffers))
 
 		// more packet will be merged.
 		for {
 			select {
 			case data := <-queue:
-				buffers = append(buffers, data...)
-				indexes = append(indexes, len(buffers))
+				sendBuffers = append(sendBuffers, data...)
+				sendIndexes = append(sendIndexes, len(sendBuffers))
 				// 合并到一定数量的buffer之后直接发送，防止无限撑大buffer
 				// 最大一次合并发送的size由sendQueue的cap来决定
-				if len(indexes) >= BufferCap {
-					return c.transport.Writev(transport.Buffers{Buffers: buffers, Indexes: indexes})
+				if len(sendIndexes) >= bufferCap {
+					return c.transport.Writev(transport.Buffers{Buffers: sendBuffers, Indexes: sendIndexes})
 				}
 			default:
-				return c.transport.Writev(transport.Buffers{Buffers: buffers, Indexes: indexes})
+				return c.transport.Writev(transport.Buffers{Buffers: sendBuffers, Indexes: sendIndexes})
 			}
 		}
 	}
@@ -253,7 +281,6 @@ func (c *channel) writeLoop() {
 			// flush buffer
 			utils.Assert(c.transport.Flush())
 		case <-c.ctx.Done():
-			_ = c.Close()
 			return
 		}
 	}
@@ -261,11 +288,7 @@ func (c *channel) writeLoop() {
 
 // once post the exception
 func (c *channel) postCloseEvent(ex Exception) {
-	if atomic.CompareAndSwapInt32(&c.posted, 0, 1) {
-		// 主动关闭的不需要触发异常流程
-		// 非主动关闭需要投递异常事件
-		if 0 == atomic.LoadInt32(&c.closed) {
-			c.pipeline.FireChannelException(ex)
-		}
+	if 0 == atomic.LoadInt32(&c.closed) {
+		c.pipeline.FireChannelInactive(ex)
 	}
 }
