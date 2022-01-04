@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"os"
 	"runtime/debug"
 	"sync"
 	"time"
@@ -158,35 +159,29 @@ func (fn EventHandlerFunc) HandleEvent(ctx EventContext, event Event) { fn(ctx, 
 // headHandler
 type headHandler struct{}
 
-func (*headHandler) HandleActive(ctx ActiveContext) {
-	ctx.HandleActive()
-}
-
-func (*headHandler) HandleRead(ctx InboundContext, message Message) {
-	ctx.HandleRead(message)
-}
-
 func (*headHandler) HandleWrite(ctx OutboundContext, message Message) {
 
+	var dataBytes [][]byte
 	switch m := message.(type) {
 	case []byte:
-		_, _ = ctx.Channel().Writev([][]byte{m})
+		dataBytes = [][]byte{m}
 	case [][]byte:
-		_, _ = ctx.Channel().Writev(m)
+		dataBytes = m
 	case io.Reader:
 		data := utils.AssertBytes(ioutil.ReadAll(m))
-		_, _ = ctx.Channel().Writev([][]byte{data})
+		dataBytes = [][]byte{data}
 	default:
-		utils.Assert(fmt.Errorf("unsupported type: %T", m))
+		panic(fmt.Errorf("unsupported type: %T", m))
 	}
-}
 
-func (*headHandler) HandleException(ctx ExceptionContext, ex Exception) {
-	ctx.HandleException(ex)
-}
+	writeN, err := ctx.Channel().Writev(dataBytes)
+	if totalN := utils.CountOf(dataBytes); totalN != writeN && nil == err {
+		err = fmt.Errorf("short write: %d != %d", totalN, writeN)
+	}
 
-func (*headHandler) HandleInactive(ctx InactiveContext, ex Exception) {
-	_ = ctx.Channel().Close()
+	if nil != err {
+		panic(err)
+	}
 }
 
 // default: tailHandler
@@ -194,15 +189,11 @@ func (*headHandler) HandleInactive(ctx InactiveContext, ex Exception) {
 type tailHandler struct{}
 
 func (*tailHandler) HandleException(ctx ExceptionContext, ex Exception) {
-	ctx.Close(ex)
-}
-
-func (*tailHandler) HandleInactive(ctx InactiveContext, ex Exception) {
-	ctx.HandleInactive(ex)
-}
-
-func (*tailHandler) HandleWrite(ctx OutboundContext, message Message) {
-	ctx.HandleWrite(message)
+	ex.PrintStackTrace(os.Stderr, "An HandleException() event was fired, and it reached at the tail of the pipeline. ",
+		"It usually means the last handler in the pipeline did not handle the exception. ",
+		fmt.Sprintf("We will close the channel(%d: %s), If you don't want to close the channel please add HandleException() to the pipeline.\n", ctx.Channel().ID(), ctx.Channel().RemoteAddr()),
+	)
+	ctx.Channel().Close(ex)
 }
 
 type (

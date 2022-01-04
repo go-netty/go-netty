@@ -25,14 +25,14 @@ import (
 
 // Exception defines an exception
 type Exception interface {
-	// unwrap inner error.
+	// Unwrap inner error.
 	Unwrap() error
-	// error message.
+	// Error message.
 	Error() string
-	// error stack.
+	// Stack stack trace.
 	Stack() []byte
-	// dump stack trace to writers.
-	PrintStackTrace(writer ...io.Writer)
+	// PrintStackTrace dump stack trace to writers.
+	PrintStackTrace(writer io.Writer, msg ...string)
 }
 
 // AsException to wrap error to Exception
@@ -41,6 +41,8 @@ func AsException(e interface{}, stack []byte) Exception {
 	switch err := e.(type) {
 	case nil:
 		return nil
+	case Exception:
+		return err
 	case error:
 		return exception{error: err, stack: stack}
 	default:
@@ -70,20 +72,36 @@ func (e exception) Stack() []byte {
 }
 
 // PrintStackTrace to write stack trance info to writer
-func (e exception) PrintStackTrace(writer ...io.Writer) {
+func (e exception) PrintStackTrace(writer io.Writer, msg ...string) {
 
 	// default: write to stderr.
-	if 0 == len(writer) {
-		writer = append(writer, os.Stderr)
+	if nil == writer {
+		writer = os.Stderr
 	}
 
 	// build output information.
 	var sb strings.Builder
-	sb.WriteString("exception: ")
-	sb.WriteString(e.Error())
+	for _, m := range msg {
+		sb.WriteString(m)
+	}
+
+	sb.WriteString("Error Traceback:\n")
+	var err = e.error
+	var i int
+	for {
+		i++
+		sb.WriteString(fmt.Sprintf("%T: %s", err, err.Error()))
+		if e, ok := err.(interface{ Unwrap() error }); ok {
+			sb.WriteString("\n" + strings.Repeat("  ", i))
+			err = e.Unwrap()
+			continue
+		}
+		break
+	}
+
 	sb.WriteString("\n")
 	sb.Write(e.Stack())
 
 	// write stack trace to writer
-	_, _ = io.Copy(io.MultiWriter(writer...), strings.NewReader(sb.String()))
+	_, _ = io.Copy(writer, strings.NewReader(sb.String()))
 }

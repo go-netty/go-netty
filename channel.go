@@ -30,40 +30,43 @@ import (
 
 // Channel is defines a server-side-channel & client-side-channel
 type Channel interface {
-	// Channel id
+	// ID channel id
 	ID() int64
-
-	// Close through the Pipeline
-	Close() error
-
-	// Return true if the Channel is active and so connected
-	IsActive() bool
 
 	// Write message through the Pipeline
 	Write(Message) bool
 
+	// Trigger user event
+	Trigger(event Event)
+
+	// Close through the Pipeline
+	Close(err error)
+
+	// IsActive return true if the Channel is active and so connected
+	IsActive() bool
+
 	// Writev to write [][]byte for optimize syscall
 	Writev([][]byte) (int64, error)
 
-	// Local address
+	// LocalAddr local address
 	LocalAddr() string
 
-	// Remote address
+	// RemoteAddr remote address
 	RemoteAddr() string
 
-	// Transport
+	// Transport get transport of channel
 	Transport() transport.Transport
 
-	// Pipeline
+	// Pipeline get pipeline of channel
 	Pipeline() Pipeline
 
-	// Get attachment
+	// Attachment get attachment
 	Attachment() Attachment
 
-	// Set attachment
+	// SetAttachment set attachment
 	SetAttachment(Attachment)
 
-	// Channel context
+	// Context channel context
 	Context() context.Context
 
 	// Start send & write routines.
@@ -107,11 +110,11 @@ type channel struct {
 	pipeline   Pipeline
 	attachment Attachment
 	sendQueue  chan [][]byte
-	wait       sync.WaitGroup
+	activeWait sync.WaitGroup
 	closed     int32
 }
 
-// Get channel id
+// ID get channel id
 func (c *channel) ID() int64 {
 	return c.id
 }
@@ -123,8 +126,30 @@ func (c *channel) Write(message Message) bool {
 	case <-c.ctx.Done():
 		return false
 	default:
-		c.pipeline.FireChannelWrite(message)
+		c.invokeMethod(func() {
+			c.pipeline.FireChannelWrite(message)
+		})
 		return true
+	}
+}
+
+// Trigger trigger event
+func (c *channel) Trigger(event Event) {
+
+	c.invokeMethod(func() {
+		c.pipeline.FireChannelEvent(event)
+	})
+}
+
+// Close through the Pipeline
+func (c *channel) Close(err error) {
+	if atomic.CompareAndSwapInt32(&c.closed, 0, 1) {
+		c.cancel()
+		c.transport.Close()
+
+		c.invokeMethod(func() {
+			c.pipeline.FireChannelInactive(AsException(err, debug.Stack()))
+		})
 	}
 }
 
@@ -142,61 +167,52 @@ func (c *channel) Writev(p [][]byte) (n int64, err error) {
 	}
 }
 
-// Close through the Pipeline
-func (c *channel) Close() error {
-	if atomic.CompareAndSwapInt32(&c.closed, 0, 1) {
-		c.cancel()
-		return c.transport.Close()
-	}
-	return nil
-}
-
-// Return true if the Channel is active and so connected
+// IsActive return true if the Channel is active and so connected
 func (c *channel) IsActive() bool {
 	return 0 == atomic.LoadInt32(&c.closed)
 }
 
-// Get transport of channel
+// Transport get transport of channel
 func (c *channel) Transport() transport.Transport {
 	return c.transport
 }
 
-// Get pipeline of channel
+// Pipeline get pipeline of channel
 func (c *channel) Pipeline() Pipeline {
 	return c.pipeline
 }
 
-// Get local address of channel
+// LocalAddr get local address of channel
 func (c *channel) LocalAddr() string {
 	return c.transport.LocalAddr().String()
 }
 
-// Get remote address of channel
+// RemoteAddr get remote address of channel
 func (c *channel) RemoteAddr() string {
 	return c.transport.RemoteAddr().String()
 }
 
-// Get attachment of channel
+// Attachment get attachment of channel
 func (c *channel) Attachment() Attachment {
 	return c.attachment
 }
 
-// Set attachment of channel
+// SetAttachment set attachment of channel
 func (c *channel) SetAttachment(v Attachment) {
 	c.attachment = v
 }
 
-// Get context of channel
+// Context get context of channel
 func (c *channel) Context() context.Context {
 	return c.ctx
 }
 
 // start write & read routines
 func (c *channel) serveChannel() {
-	c.wait.Add(1)
+	c.activeWait.Add(1)
 	go c.readLoop()
 	go c.writeLoop()
-	c.wait.Wait()
+	c.activeWait.Wait()
 }
 
 func (c *channel) invokeMethod(fn func()) {
@@ -204,6 +220,13 @@ func (c *channel) invokeMethod(fn func()) {
 	defer func() {
 		if err := recover(); nil != err && 0 == atomic.LoadInt32(&c.closed) {
 			c.pipeline.FireChannelException(AsException(err, debug.Stack()))
+
+			if e, ok := err.(error); ok {
+				var ne net.Error
+				if errors.As(e, &ne) && !ne.Temporary() {
+					c.Close(e)
+				}
+			}
 		}
 	}()
 
@@ -214,11 +237,15 @@ func (c *channel) invokeMethod(fn func()) {
 func (c *channel) readLoop() {
 
 	defer func() {
-		c.postCloseEvent(AsException(recover(), debug.Stack()))
+		if err := recover(); nil != err {
+			c.Close(AsException(err, debug.Stack()))
+		} else {
+			c.Close(nil)
+		}
 	}()
 
 	func() {
-		defer c.wait.Done()
+		defer c.activeWait.Done()
 		c.invokeMethod(c.pipeline.FireChannelActive)
 	}()
 
@@ -227,7 +254,9 @@ func (c *channel) readLoop() {
 		case <-c.ctx.Done():
 			return
 		default:
-			c.invokeMethod(func() { c.pipeline.FireChannelRead(c.transport) })
+			c.invokeMethod(func() {
+				c.pipeline.FireChannelRead(c.transport)
+			})
 		}
 	}
 }
@@ -237,7 +266,9 @@ func (c *channel) writeLoop() {
 
 	defer func() {
 		if err := recover(); nil != err {
-			c.postCloseEvent(AsException(err, debug.Stack()))
+			c.Close(AsException(err, debug.Stack()))
+		} else {
+			c.Close(nil)
 		}
 	}()
 
@@ -283,12 +314,5 @@ func (c *channel) writeLoop() {
 		case <-c.ctx.Done():
 			return
 		}
-	}
-}
-
-// once post the exception
-func (c *channel) postCloseEvent(ex Exception) {
-	if 0 == atomic.LoadInt32(&c.closed) {
-		c.pipeline.FireChannelInactive(ex)
 	}
 }

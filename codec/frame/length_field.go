@@ -20,11 +20,12 @@ import (
 	"bytes"
 	"encoding/binary"
 	"fmt"
+	"io"
+	"io/ioutil"
+
 	"github.com/go-netty/go-netty"
 	"github.com/go-netty/go-netty/codec"
 	"github.com/go-netty/go-netty/utils"
-	"io"
-	"io/ioutil"
 )
 
 // LengthFieldCodec create a length field based codec
@@ -82,7 +83,7 @@ func (l *lengthFieldCodec) HandleRead(ctx netty.InboundContext, message netty.Me
 	headerBuffer := make([]byte, lengthFieldEndOffset)
 	n, err := io.ReadFull(reader, headerBuffer)
 
-	utils.AssertIf(n != len(headerBuffer) || nil != err, "read header fail, headerLength: %d, read: %d, error: %v", len(headerBuffer), n, err)
+	utils.AssertIf(n != len(headerBuffer) || nil != err, "read header fail, headerLength: %d, read: %d, error: %w", len(headerBuffer), n, err)
 
 	lengthFieldBuff := headerBuffer[l.lengthFieldOffset:lengthFieldEndOffset]
 
@@ -111,7 +112,7 @@ func (l *lengthFieldCodec) HandleRead(ctx netty.InboundContext, message netty.Me
 	// strip bytes
 	if l.initialBytesToStrip > 0 {
 		n, err := io.CopyN(ioutil.Discard, frameReader, int64(l.initialBytesToStrip))
-		utils.AssertIf(nil != err || int64(l.initialBytesToStrip) != n, "initialBytesToStrip: %d -> %d, %v", l.initialBytesToStrip, n, err)
+		utils.AssertIf(nil != err || int64(l.initialBytesToStrip) != n, "initialBytesToStrip: %d -> %d, %w", l.initialBytesToStrip, n, err)
 	}
 
 	ctx.HandleRead(frameReader)

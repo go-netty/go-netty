@@ -21,14 +21,18 @@ import "fmt"
 // Assert if nil != err
 func Assert(err error, msg ...interface{}) {
 	if nil != err {
-		panic(fmt.Sprint(err, fmt.Sprint(msg...)))
+		if len(msg) <= 0 {
+			panic(err)
+		} else {
+			panic(fmt.Errorf("%w: %s", err, fmt.Sprint(msg...)))
+		}
 	}
 }
 
 // AssertIf exp
 func AssertIf(exp bool, msg string, args ...interface{}) {
 	if exp {
-		panic(fmt.Sprintf(msg, args...))
+		panic(fmt.Errorf(msg, args...))
 	}
 }
 

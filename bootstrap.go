@@ -27,9 +27,9 @@ import (
 
 // Bootstrap makes it easy to bootstrap a channel
 type Bootstrap interface {
-	// Return context
+	// Context return context
 	Context() context.Context
-	// Create a listener
+	// Listen create a listener
 	Listen(url string, option ...transport.Option) Listener
 	// Connect to remote endpoint
 	Connect(url string, attachment Attachment, option ...transport.Option) (Channel, error)
@@ -120,7 +120,7 @@ func (bs *bootstrap) Listen(url string, option ...transport.Option) Listener {
 	return l
 }
 
-// Stop the bootstrap
+// Shutdown the bootstrap
 func (bs *bootstrap) Shutdown() {
 	bs.bootstrapCancel()
 
@@ -135,13 +135,12 @@ func (bs *bootstrap) removeListener(url string) {
 	bs.listeners.Delete(url)
 }
 
-// Listener
 type Listener interface {
 	// Close the listener
 	Close() error
-	// Waits for this listener until it is done
+	// Sync waits for this listener until it is done
 	Sync() error
-	// Nonblock waits for this listener
+	// Async nonblock waits for this listener
 	Async(func(error))
 }
 
@@ -154,7 +153,7 @@ type listener struct {
 	acceptor transport.Acceptor
 }
 
-// Close close listener
+// Close listener
 func (l *listener) Close() error {
 	if l.acceptor != nil {
 		l.bs.removeListener(l.url)

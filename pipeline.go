@@ -25,34 +25,33 @@ import (
 // Pipeline defines a message processing pipeline.
 type Pipeline interface {
 
-	// add a handler to the first.
+	// AddFirst add a handler to the first.
 	AddFirst(handlers ...Handler) Pipeline
 
-	// add a handler to the last.
+	// AddLast add a handler to the last.
 	AddLast(handlers ...Handler) Pipeline
 
-	// add handlers in position.
+	// AddHandler add handlers in position.
 	AddHandler(position int, handlers ...Handler) Pipeline
 
-	// find fist index of handler.
+	// IndexOf find fist index of handler.
 	IndexOf(func(Handler) bool) int
 
-	// find last index of handler.
+	// LastIndexOf find last index of handler.
 	LastIndexOf(func(Handler) bool) int
 
-	// get context by position.
+	// ContextAt get context by position.
 	ContextAt(position int) HandlerContext
 
-	// size of handler
+	// Size of handler
 	Size() int
 
-	// channel.
+	// Channel get channel.
 	Channel() Channel
 
-	// serve the channel.
+	// ServeChannel serve the channel.
 	ServeChannel(channel Channel)
 
-	// internal use.
 	FireChannelActive()
 	FireChannelRead(message Message)
 	FireChannelWrite(message Message)
@@ -99,6 +98,9 @@ type pipeline struct {
 
 // AddFirst to add handlers at head
 func (p *pipeline) AddFirst(handlers ...Handler) Pipeline {
+	// checking handler.
+	checkHandler(handlers...)
+
 	for _, h := range handlers {
 		p.addFirst(h)
 	}
@@ -107,6 +109,9 @@ func (p *pipeline) AddFirst(handlers ...Handler) Pipeline {
 
 // AddLast to add handlers at tail
 func (p *pipeline) AddLast(handlers ...Handler) Pipeline {
+	// checking handler.
+	checkHandler(handlers...)
+
 	for _, h := range handlers {
 		p.addLast(h)
 	}
@@ -205,9 +210,6 @@ func (p *pipeline) Size() int {
 // addFirst to add handlers head
 func (p *pipeline) addFirst(handler Handler) {
 
-	// checking handler.
-	checkHandler(handler)
-
 	oldNext := p.head.next
 	p.head.next = &handlerContext{
 		pipeline: p,
@@ -222,9 +224,6 @@ func (p *pipeline) addFirst(handler Handler) {
 
 // addLast to add handlers tail
 func (p *pipeline) addLast(handler Handler) {
-
-	// checking handler.
-	checkHandler(handler)
 
 	oldPrev := p.tail.prev
 	p.tail.prev = &handlerContext{
@@ -243,7 +242,7 @@ func (p *pipeline) Channel() Channel {
 	return p.channel
 }
 
-// serveChannel to serve the channel
+// ServeChannel serveChannel to serve the channel
 func (p *pipeline) ServeChannel(channel Channel) {
 
 	utils.AssertIf(nil != p.channel, "already attached channel")
@@ -251,32 +250,26 @@ func (p *pipeline) ServeChannel(channel Channel) {
 	p.channel.serveChannel()
 }
 
-// fireChannelActive
 func (p *pipeline) FireChannelActive() {
 	p.head.HandleActive()
 }
 
-// fireChannelRead
 func (p *pipeline) FireChannelRead(message Message) {
 	p.head.HandleRead(message)
 }
 
-// fireChannelWrite
 func (p *pipeline) FireChannelWrite(message Message) {
 	p.tail.HandleWrite(message)
 }
 
-// fireChannelException
 func (p *pipeline) FireChannelException(ex Exception) {
 	p.head.HandleException(ex)
 }
 
-// fireChannelInactive
 func (p *pipeline) FireChannelInactive(ex Exception) {
-	p.tail.HandleInactive(ex)
+	p.head.HandleInactive(ex)
 }
 
-// fireChannelEvent
 func (p *pipeline) FireChannelEvent(event Event) {
 	p.head.HandleEvent(event)
 }
@@ -284,7 +277,7 @@ func (p *pipeline) FireChannelEvent(event Event) {
 // checkHandler to checking handlers
 func checkHandler(handlers ...Handler) {
 
-	for _, h := range handlers {
+	for index, h := range handlers {
 		switch h.(type) {
 		case ActiveHandler:
 		case InboundHandler:
@@ -293,7 +286,7 @@ func checkHandler(handlers ...Handler) {
 		case InactiveHandler:
 		case EventHandler:
 		default:
-			utils.Assert(fmt.Errorf("unrecognized Handler: %T", h))
+			utils.Assert(fmt.Errorf("unrecognized Handler: %d:%T", index, h))
 		}
 	}
 }

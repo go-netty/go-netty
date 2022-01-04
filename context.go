@@ -24,8 +24,8 @@ type (
 		Channel() Channel
 		Handler() Handler
 		Write(message Message)
-		Close(err error)
 		Trigger(event Event)
+		Close(err error)
 		Attachment() Attachment
 		SetAttachment(Attachment)
 	}
@@ -84,6 +84,13 @@ func (hc *handlerContext) nextContext() *handlerContext {
 }
 
 func (hc *handlerContext) Write(message Message) {
+
+	defer func() {
+		if err := recover(); nil != err {
+			hc.Channel().Pipeline().FireChannelException(AsException(err, debug.Stack()))
+		}
+	}()
+
 	var next = hc
 
 	for {
@@ -98,27 +105,14 @@ func (hc *handlerContext) Write(message Message) {
 	}
 }
 
-func (hc *handlerContext) Close(err error) {
-
-	ex, ok := err.(Exception)
-	if !ok && err != nil {
-		ex = AsException(err, debug.Stack())
-	}
-
-	var prev = hc
-	for {
-		if prev = prev.prevContext(); nil == prev {
-			break
-		}
-
-		if handler, ok := prev.Handler().(InactiveHandler); ok {
-			handler.HandleInactive(prev, ex)
-			break
-		}
-	}
-}
-
 func (hc *handlerContext) Trigger(event Event) {
+
+	defer func() {
+		if err := recover(); nil != err {
+			hc.Channel().Pipeline().FireChannelException(AsException(err, debug.Stack()))
+		}
+	}()
+
 	var next = hc
 
 	for {
@@ -131,6 +125,10 @@ func (hc *handlerContext) Trigger(event Event) {
 			break
 		}
 	}
+}
+
+func (hc *handlerContext) Close(err error) {
+	hc.Channel().Close(err)
 }
 
 func (hc *handlerContext) Channel() Channel {
@@ -214,7 +212,7 @@ func (hc *handlerContext) HandleInactive(ex Exception) {
 	var next = hc
 
 	for {
-		if next = next.prevContext(); nil == next {
+		if next = next.nextContext(); nil == next {
 			break
 		}
 

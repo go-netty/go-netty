@@ -19,13 +19,14 @@ package netty
 import (
 	"bytes"
 	"fmt"
-	"github.com/go-netty/go-netty/transport/tcp"
-	"github.com/go-netty/go-netty/utils"
 	"io"
 	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"github.com/go-netty/go-netty/transport/tcp"
+	"github.com/go-netty/go-netty/utils"
 )
 
 func TestBootstrap(t *testing.T) {
@@ -121,9 +122,7 @@ func (e echoHandler) HandleWrite(ctx OutboundContext, message Message) {
 
 func (e echoHandler) HandleException(ctx ExceptionContext, ex Exception) {
 	fmt.Println("exception: ", ctx.Channel().ID(), ex, " isActive: ", ctx.Channel().IsActive())
-	stackBuffer := bytes.NewBuffer(nil)
-	ex.PrintStackTrace(stackBuffer)
-	ctx.HandleException(ex)
+	ctx.Channel().Close(ex)
 }
 
 func (e echoHandler) HandleInactive(ctx InactiveContext, ex Exception) {

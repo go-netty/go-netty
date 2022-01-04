@@ -107,3 +107,11 @@ func MustToBytes(message interface{}) []byte {
 	}
 	return r
 }
+
+// CountOf count bytes of buffs
+func CountOf(buffs [][]byte) (n int64) {
+	for _, buff := range buffs {
+		n += int64(len(buff))
+	}
+	return
+}

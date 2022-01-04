@@ -91,3 +91,17 @@ func TestToBytes(t *testing.T) {
 	t.Run("string", runTest(ToBytes(string(byteString))))
 	t.Run("io.Reader", runTest(ToBytes(bytes.NewReader(byteString))))
 }
+
+func TestCountOf(t *testing.T) {
+
+	var buffers [][]byte
+	var totalBytes int
+	for i := 0; i < 10; i ++ {
+		buffers = append(buffers, make([]byte, i))
+		totalBytes += i
+	}
+
+	if n := CountOf(buffers); n != int64(totalBytes) {
+		t.Fatalf("bytes not equal: %d != %d", n, totalBytes)
+	}
+}

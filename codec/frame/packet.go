@@ -17,10 +17,12 @@
 package frame
 
 import (
+	"errors"
+	"io"
+
 	"github.com/go-netty/go-netty"
 	"github.com/go-netty/go-netty/codec"
 	"github.com/go-netty/go-netty/utils"
-	"io"
 )
 
 // PacketCodec create packet codec
@@ -42,8 +44,9 @@ func (p *packetCodec) HandleRead(ctx netty.InboundContext, message netty.Message
 
 	reader := utils.MustToReader(message)
 	n, err := reader.Read(p.buffer)
-	utils.AssertIf(nil != err && io.EOF != err, "%v", err)
-
+	if nil != err && !errors.Is(err, io.EOF) {
+		panic(err)
+	}
 	ctx.HandleRead(p.buffer[:n])
 }
 

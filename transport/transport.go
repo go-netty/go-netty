@@ -18,7 +18,6 @@ package transport
 
 import (
 	"fmt"
-	"io"
 	"net"
 	"net/url"
 )
@@ -56,28 +55,20 @@ type Buffers struct {
 
 // BuffersWriter defines writev for optimized syscall
 type BuffersWriter interface {
-	// writev
 	Writev(buffs Buffers) (int64, error)
 }
 
 // Transport defines a transport
 type Transport interface {
-	// read & write & close
-	io.ReadWriteCloser
+	net.Conn
 
-	// syscall: sendmsg
+	// BuffersWriter for optimized syscall
 	BuffersWriter
 
-	// local address.
-	LocalAddr() Addr
-
-	// remote address.
-	RemoteAddr() Addr
-
-	// flush buffer.
+	// Flush flush buffer.
 	Flush() error
 
-	// raw transport object.
+	// RawTransport raw transport object.
 	RawTransport() interface{}
 }
 
@@ -90,7 +81,7 @@ type Acceptor interface {
 // Factory defines transport factory
 type Factory interface {
 
-	// Supported schemes.
+	// Schemes supported schemes.
 	Schemes() Schemes
 
 	// Connect to the peer with the specified address.
