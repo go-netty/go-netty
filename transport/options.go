@@ -35,7 +35,7 @@ type Options struct {
 	// In client side: connect address.
 	Address *url.URL
 
-	// other configure pass by context.WithValue
+	// Other configure pass by context.WithValue
 	Context context.Context
 }
 

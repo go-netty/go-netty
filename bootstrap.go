@@ -70,29 +70,29 @@ func (bs *bootstrap) Context() context.Context {
 func (bs *bootstrap) serveTransport(transport transport.Transport, attachment Attachment, childChannel bool) Channel {
 
 	// create a new pipeline
-	pipeline := bs.pipelineFactory()
+	pl := bs.pipelineFactory()
 
 	// generate a channel id
 	cid := bs.channelIDFactory()
 
 	// create a channel
-	channel := bs.channelFactory(cid, bs.bootstrapCtx, pipeline, transport)
+	ch := bs.channelFactory(cid, bs.bootstrapCtx, pl, transport)
 
 	// set the attachment if necessary
 	if nil != attachment {
-		channel.SetAttachment(attachment)
+		ch.SetAttachment(attachment)
 	}
 
 	// initialization pipeline
 	if childChannel {
-		bs.childInitializer(channel)
+		bs.childInitializer(ch)
 	} else {
-		bs.clientInitializer(channel)
+		bs.clientInitializer(ch)
 	}
 
 	// serve channel.
-	channel.Pipeline().ServeChannel(channel)
-	return channel
+	ch.Pipeline().ServeChannel(ch)
+	return ch
 }
 
 // Connect to the remote server with options
@@ -162,6 +162,7 @@ func (l *listener) Close() error {
 	return nil
 }
 
+// Sync accept new transport from listener
 func (l *listener) Sync() error {
 
 	if nil != l.acceptor {
@@ -195,6 +196,7 @@ func (l *listener) Sync() error {
 	}
 }
 
+// Async accept new transport from listener
 func (l *listener) Async(fn func(err error)) {
 	go func() {
 		fn(l.Sync())

@@ -33,7 +33,7 @@ type Channel interface {
 	// ID channel id
 	ID() int64
 
-	// Write message through the Pipeline
+	// Write a message through the Pipeline
 	Write(Message) bool
 
 	// Trigger user event
@@ -119,7 +119,7 @@ func (c *channel) ID() int64 {
 	return c.id
 }
 
-// Write message through the Pipeline
+// Write a message through the Pipeline
 func (c *channel) Write(message Message) bool {
 
 	select {
@@ -207,7 +207,7 @@ func (c *channel) Context() context.Context {
 	return c.ctx
 }
 
-// start write & read routines
+// serveChannel start write & read routines
 func (c *channel) serveChannel() {
 	c.activeWait.Add(1)
 	go c.readLoop()
@@ -233,7 +233,7 @@ func (c *channel) invokeMethod(fn func()) {
 	fn()
 }
 
-// reading message of channel
+// readLoop reading message of channel
 func (c *channel) readLoop() {
 
 	defer func() {
@@ -261,7 +261,7 @@ func (c *channel) readLoop() {
 	}
 }
 
-// sending message of channel
+// writeLoop sending message of channel
 func (c *channel) writeLoop() {
 
 	defer func() {
@@ -293,8 +293,6 @@ func (c *channel) writeLoop() {
 			case data := <-queue:
 				sendBuffers = append(sendBuffers, data...)
 				sendIndexes = append(sendIndexes, len(sendBuffers))
-				// 合并到一定数量的buffer之后直接发送，防止无限撑大buffer
-				// 最大一次合并发送的size由sendQueue的cap来决定
 				if len(sendIndexes) >= bufferCap {
 					return c.transport.Writev(transport.Buffers{Buffers: sendBuffers, Indexes: sendIndexes})
 				}

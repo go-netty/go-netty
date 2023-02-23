@@ -49,28 +49,28 @@ func TestBootstrap(t *testing.T) {
 		SockBuf:         1024,
 	}
 
-	bootstrap := NewBootstrap(
+	bs := NewBootstrap(
 		WithChannel(NewBufferedChannel(128, 1024)),
 		WithChildInitializer(pipelineInitializer),
 		WithClientInitializer(pipelineInitializer),
 		WithTransport(tcp.New()),
 	)
 
-	bootstrap.Listen("127.0.0.1:9527", tcp.WithOptions(tcpOptions)).Async(func(err error) {
+	bs.Listen("127.0.0.1:9527", tcp.WithOptions(tcpOptions)).Async(func(err error) {
 		if nil != err && !strings.Contains(err.Error(), "use of closed network connection") {
 			t.Fatal(err)
 		}
 	})
 
-	channel, err := bootstrap.Connect("tcp://127.0.0.1:9527", "go-netty")
+	ch, err := bs.Connect("tcp://127.0.0.1:9527", "go-netty")
 	if nil != err {
 		t.Fatal(err)
 	}
 
-	channel.Write("https://go-netty.com")
+	ch.Write("https://go-netty.com")
 
 	time.Sleep(time.Second * 3)
-	bootstrap.Shutdown()
+	bs.Shutdown()
 	time.Sleep(time.Second)
 }
 

@@ -37,19 +37,8 @@ import (
 type Addr = net.Addr
 
 // Buffers to optimize message merging
-// 用于优化消息的发送
-// 1. 利用net.Buffers的接口实现Writev的系统调用优化
-// 2. 免除合并buffer时导致的多余内存分配和内存考虑消耗
-// tcp中最常见的协议头一般需要在最后发送之前在头部追加协议头，通常需要分配一个
-// (sizeof(协议头) + sizeof(payload))的内存用于拼接最终的协议包用于发送
-// 这里使用索引的方式标记出包与包的界限，这样就可以免除合并操作，可以极大的降低发送开销
-// 下图中Buffers中的一个.（点）代表一个[]byte，[..] 通常代表[header, payload]
-// [ [(header), (payload)], [(header), (payload1), (payload2)] ]
-//            2                                 5
 type Buffers struct {
-	// [[..], [...], [...], [....]]
 	Buffers net.Buffers
-	// [2, 5, 8, 12]
 	Indexes []int
 }
 

@@ -18,6 +18,8 @@ package tcp
 
 import (
 	"net"
+	"sync/atomic"
+	"time"
 
 	"github.com/go-netty/go-netty/transport"
 )
@@ -67,21 +69,41 @@ func (f *tcpFactory) Listen(options *transport.Options) (transport.Acceptor, err
 type tcpAcceptor struct {
 	listener *net.TCPListener
 	options  *Options
+	closed   int32
 }
 
 func (t *tcpAcceptor) Accept() (transport.Transport, error) {
 
-	conn, err := t.listener.AcceptTCP()
-	if nil != err {
-		return nil, err
-	}
+	var tempDelay time.Duration // how long to sleep on accept failure
 
-	return (&tcpTransport{TCPConn: conn}).applyOptions(t.options, false)
+	for {
+		conn, err := t.listener.AcceptTCP()
+		if nil != err {
+			if 0 != atomic.LoadInt32(&t.closed) {
+				return nil, err // listener closed
+			}
+
+			if ne, ok := err.(net.Error); ok && ne.Temporary() {
+				if tempDelay == 0 {
+					tempDelay = 5 * time.Millisecond
+				} else {
+					tempDelay *= 2
+				}
+				if max := 1 * time.Second; tempDelay > max {
+					tempDelay = max
+				}
+				time.Sleep(tempDelay)
+				continue
+			}
+			return nil, err
+		}
+
+		return (&tcpTransport{TCPConn: conn}).applyOptions(t.options, false)
+	}
 }
 
 func (t *tcpAcceptor) Close() error {
-	if t.listener != nil {
-		defer func() { t.listener = nil }()
+	if atomic.CompareAndSwapInt32(&t.closed, 0, 1) {
 		return t.listener.Close()
 	}
 	return nil

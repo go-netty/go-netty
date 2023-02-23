@@ -32,7 +32,7 @@ type (
 	// Message defines an any message
 	//
 	// Represent different objects in different processing steps,
-	// in most cases the message type handled by the codec is mainly io.Reader / []byte,
+	// usually the message type handled by the codec is mainly io.Reader / []byte,
 	// in the user handler should have been converted to a protocol object.
 	Message interface {
 	}
@@ -156,7 +156,6 @@ type EventHandlerFunc func(ctx EventContext, event Event)
 // HandleEvent to impl EventHandler
 func (fn EventHandlerFunc) HandleEvent(ctx EventContext, event Event) { fn(ctx, event) }
 
-// headHandler
 type headHandler struct{}
 
 func (*headHandler) HandleWrite(ctx OutboundContext, message Message) {
@@ -184,11 +183,10 @@ func (*headHandler) HandleWrite(ctx OutboundContext, message Message) {
 	}
 }
 
-// default: tailHandler
-// The final closing operation will be provided when the user registered handler is not processing.
 type tailHandler struct{}
 
 func (*tailHandler) HandleException(ctx ExceptionContext, ex Exception) {
+	// The final closing operation will be provided when the user registered handler is not processing.
 	ex.PrintStackTrace(os.Stderr, "An HandleException() event was fired, and it reached at the tail of the pipeline. ",
 		"It usually means the last handler in the pipeline did not handle the exception. ",
 		fmt.Sprintf("We will close the channel(%d: %s), If you don't want to close the channel please add HandleException() to the pipeline.\n", ctx.Channel().ID(), ctx.Channel().RemoteAddr()),
