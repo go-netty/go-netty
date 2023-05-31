@@ -69,10 +69,33 @@ type (
 
 // handlerContext impl HandlerContext
 type handlerContext struct {
-	pipeline Pipeline
-	handler  Handler
-	prev     *handlerContext
-	next     *handlerContext
+	pipeline       Pipeline
+	handler        Handler
+	prev           *handlerContext
+	next           *handlerContext
+	cast2Active    ActiveHandler
+	cast2Inbound   InboundHandler
+	cast2Outbound  OutboundHandler
+	cast2Exception ExceptionHandler
+	cast2Inactive  InactiveHandler
+	cast2Event     EventHandler
+}
+
+func newHandlerContext(p Pipeline, handler Handler, prev, next *handlerContext) *handlerContext {
+	hc := &handlerContext{
+		pipeline: p,
+		handler:  handler,
+		prev:     prev,
+		next:     next,
+	}
+
+	hc.cast2Active, _ = handler.(ActiveHandler)
+	hc.cast2Inbound, _ = handler.(InboundHandler)
+	hc.cast2Outbound, _ = handler.(OutboundHandler)
+	hc.cast2Exception, _ = handler.(ExceptionHandler)
+	hc.cast2Inactive, _ = handler.(InactiveHandler)
+	hc.cast2Event, _ = handler.(EventHandler)
+	return hc
 }
 
 func (hc *handlerContext) prevContext() *handlerContext {
@@ -98,7 +121,7 @@ func (hc *handlerContext) Write(message Message) {
 			break
 		}
 
-		if handler, ok := next.Handler().(OutboundHandler); ok {
+		if handler := next.cast2Outbound; nil != handler {
 			handler.HandleWrite(next, message)
 			break
 		}
@@ -120,7 +143,7 @@ func (hc *handlerContext) Trigger(event Event) {
 			break
 		}
 
-		if handler, ok := next.Handler().(EventHandler); ok {
+		if handler := next.cast2Event; nil != handler {
 			handler.HandleEvent(next, event)
 			break
 		}
@@ -156,7 +179,7 @@ func (hc *handlerContext) HandleActive() {
 			break
 		}
 
-		if handler, ok := next.Handler().(ActiveHandler); ok {
+		if handler := next.cast2Active; nil != handler {
 			handler.HandleActive(next)
 			break
 		}
@@ -171,7 +194,7 @@ func (hc *handlerContext) HandleRead(message Message) {
 			break
 		}
 
-		if handler, ok := next.Handler().(InboundHandler); ok {
+		if handler := next.cast2Inbound; nil != handler {
 			handler.HandleRead(next, message)
 			break
 		}
@@ -186,7 +209,7 @@ func (hc *handlerContext) HandleWrite(message Message) {
 			break
 		}
 
-		if handler, ok := prev.Handler().(OutboundHandler); ok {
+		if handler := prev.cast2Outbound; nil != handler {
 			handler.HandleWrite(prev, message)
 			break
 		}
@@ -201,7 +224,7 @@ func (hc *handlerContext) HandleException(ex Exception) {
 			break
 		}
 
-		if handler, ok := next.Handler().(ExceptionHandler); ok {
+		if handler := next.cast2Exception; nil != handler {
 			handler.HandleException(next, ex)
 			break
 		}
@@ -216,7 +239,7 @@ func (hc *handlerContext) HandleInactive(ex Exception) {
 			break
 		}
 
-		if handler, ok := next.Handler().(InactiveHandler); ok {
+		if handler := next.cast2Inactive; nil != handler {
 			handler.HandleInactive(next, ex)
 			break
 		}
@@ -231,7 +254,7 @@ func (hc *handlerContext) HandleEvent(event Event) {
 			break
 		}
 
-		if handler, ok := next.Handler().(EventHandler); ok {
+		if handler := next.cast2Event; nil != handler {
 			handler.HandleEvent(next, event)
 			break
 		}

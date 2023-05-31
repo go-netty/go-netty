@@ -60,25 +60,12 @@ type Pipeline interface {
 	FireChannelEvent(event Event)
 }
 
-// NewPipeline convert to PipelineFactory
-func NewPipeline() PipelineFactory {
-	return NewPipelineWith
-}
-
-// NewPipelineWith create a pipeline.
-func NewPipelineWith() Pipeline {
+// NewPipeline create a pipeline.
+func NewPipeline() Pipeline {
 
 	p := &pipeline{}
-
-	p.head = &handlerContext{
-		pipeline: p,
-		handler:  new(headHandler),
-	}
-
-	p.tail = &handlerContext{
-		pipeline: p,
-		handler:  new(tailHandler),
-	}
+	p.head = newHandlerContext(p, headHandler{}, nil, nil)
+	p.tail = newHandlerContext(p, tailHandler{}, nil, nil)
 
 	p.head.next = p.tail
 	p.tail.prev = p.head
@@ -138,12 +125,7 @@ func (p *pipeline) AddHandler(position int, handlers ...Handler) Pipeline {
 
 	for _, h := range handlers {
 		oldNext := curNode.next
-		curNode.next = &handlerContext{
-			pipeline: p,
-			handler:  h,
-			prev:     curNode,
-			next:     oldNext,
-		}
+		curNode.next = newHandlerContext(p, h, curNode, oldNext)
 
 		oldNext.prev = curNode.next
 		curNode = curNode.next
@@ -211,13 +193,7 @@ func (p *pipeline) Size() int {
 func (p *pipeline) addFirst(handler Handler) {
 
 	oldNext := p.head.next
-	p.head.next = &handlerContext{
-		pipeline: p,
-		handler:  handler,
-		prev:     p.head,
-		next:     oldNext,
-	}
-
+	p.head.next = newHandlerContext(p, handler, p.head, oldNext)
 	oldNext.prev = p.head.next
 	p.size++
 }
@@ -226,13 +202,7 @@ func (p *pipeline) addFirst(handler Handler) {
 func (p *pipeline) addLast(handler Handler) {
 
 	oldPrev := p.tail.prev
-	p.tail.prev = &handlerContext{
-		pipeline: p,
-		handler:  handler,
-		prev:     oldPrev,
-		next:     p.tail,
-	}
-
+	p.tail.prev = newHandlerContext(p, handler, oldPrev, p.tail)
 	oldPrev.next = p.tail.prev
 	p.size++
 }

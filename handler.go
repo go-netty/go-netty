@@ -158,7 +158,7 @@ func (fn EventHandlerFunc) HandleEvent(ctx EventContext, event Event) { fn(ctx, 
 
 type headHandler struct{}
 
-func (*headHandler) HandleWrite(ctx OutboundContext, message Message) {
+func (headHandler) HandleWrite(ctx OutboundContext, message Message) {
 
 	var dataBytes [][]byte
 	switch m := message.(type) {
@@ -185,7 +185,7 @@ func (*headHandler) HandleWrite(ctx OutboundContext, message Message) {
 
 type tailHandler struct{}
 
-func (*tailHandler) HandleException(ctx ExceptionContext, ex Exception) {
+func (tailHandler) HandleException(ctx ExceptionContext, ex Exception) {
 	// The final closing operation will be provided when the user registered handler is not processing.
 	ex.PrintStackTrace(os.Stderr, "An HandleException() event was fired, and it reached at the tail of the pipeline. ",
 		"It usually means the last handler in the pipeline did not handle the exception. ",

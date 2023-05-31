@@ -20,52 +20,52 @@ import "testing"
 
 type oneHandler struct{}
 
-func (h oneHandler) HandleActive(ctx ActiveContext) {}
+func (h oneHandler) HandleActive(ctx ActiveContext) { ctx.HandleActive() }
 
 type twoHandler struct{}
 
-func (h twoHandler) HandleRead(ctx InboundContext, message Message) {}
+func (h twoHandler) HandleRead(ctx InboundContext, message Message) { ctx.HandleRead(message) }
 
 type threeHandler struct{}
 
-func (h threeHandler) HandleWrite(ctx OutboundContext, message Message) {}
+func (h threeHandler) HandleWrite(ctx OutboundContext, message Message) { ctx.HandleWrite(message) }
 
 type fourHandler struct{}
 
-func (h fourHandler) HandleException(ctx ExceptionContext, ex Exception) {}
+func (h fourHandler) HandleException(ctx ExceptionContext, ex Exception) { ctx.HandleException(ex) }
 
 type fiveHandler struct{}
 
-func (h fiveHandler) HandleInactive(ctx InactiveContext, ex Exception) {}
+func (h fiveHandler) HandleInactive(ctx InactiveContext, ex Exception) { ctx.HandleInactive(ex) }
 
 func TestPipeline(t *testing.T) {
 
-	pipeline := NewPipelineWith()
+	pl := NewPipeline()
 
-	if 2 != pipeline.Size() {
+	if 2 != pl.Size() {
 		t.Fatal("headHandler / tailHandler")
 	}
 
-	pipeline.AddHandler(-1, twoHandler{})
-	pipeline.AddFirst(oneHandler{})
+	pl.AddHandler(-1, twoHandler{})
+	pl.AddFirst(oneHandler{})
 
-	if -1 != pipeline.IndexOf(func(handler Handler) bool {
+	if -1 != pl.IndexOf(func(handler Handler) bool {
 		return false
 	}) {
 		t.Fatal("unexpected index")
 	}
 
-	if -1 != pipeline.LastIndexOf(func(handler Handler) bool {
+	if -1 != pl.LastIndexOf(func(handler Handler) bool {
 		return false
 	}) {
 		t.Fatal("unexpected index")
 	}
 
-	if nil != pipeline.ContextAt(-1) {
+	if nil != pl.ContextAt(-1) {
 		t.Fatal("unexpected result")
 	}
 
-	twoIndex := pipeline.IndexOf(func(handler Handler) bool {
+	twoIndex := pl.IndexOf(func(handler Handler) bool {
 		_, ok := handler.(twoHandler)
 		return ok
 	})
@@ -74,10 +74,10 @@ func TestPipeline(t *testing.T) {
 		t.Fatal("twoHandler:", twoIndex)
 	}
 
-	pipeline.AddHandler(twoIndex, threeHandler{}, fourHandler{}, fiveHandler{})
+	pl.AddHandler(twoIndex, threeHandler{}, fourHandler{}, fiveHandler{})
 
-	for i := 1; i < pipeline.Size()-1; i++ {
-		handler := pipeline.ContextAt(i).Handler()
+	for i := 1; i < pl.Size()-1; i++ {
+		handler := pl.ContextAt(i).Handler()
 		switch handler.(type) {
 		case oneHandler:
 			if 1 != i {
@@ -104,4 +104,16 @@ func TestPipeline(t *testing.T) {
 		}
 	}
 
+}
+
+func BenchmarkPipeline(b *testing.B) {
+
+	pl := NewPipeline().AddLast(oneHandler{}, twoHandler{}, threeHandler{}, fourHandler{}, fiveHandler{})
+
+	b.ResetTimer()
+	b.ReportAllocs()
+
+	for i := 0; i < b.N; i++ {
+		pl.FireChannelActive()
+	}
 }

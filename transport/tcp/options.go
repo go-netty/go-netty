@@ -42,19 +42,19 @@ type Options struct {
 	SockBuf         int           `json:"sockbuf,string"`
 }
 
-var contextKey = struct{ key string }{"go-netty-transport-tcp-options"}
+type contextKey struct{}
 
 // WithOptions to wrap the tcp options
 func WithOptions(option *Options) transport.Option {
 	return func(options *transport.Options) error {
-		options.Context = context.WithValue(options.Context, contextKey, option)
+		options.Context = context.WithValue(options.Context, contextKey{}, option)
 		return nil
 	}
 }
 
 // FromContext to unwrap the tcp options
 func FromContext(ctx context.Context, def *Options) *Options {
-	if v, ok := ctx.Value(contextKey).(*Options); ok {
+	if v, ok := ctx.Value(contextKey{}).(*Options); ok {
 		return v
 	}
 	return def

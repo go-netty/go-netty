@@ -42,7 +42,7 @@ func NewBootstrap(option ...Option) Bootstrap {
 
 	opts := &bootstrapOptions{
 		channelIDFactory: SequenceID(),
-		pipelineFactory:  NewPipeline(),
+		pipelineFactory:  NewPipeline,
 		channelFactory:   NewChannel(128),
 		transportFactory: tcp.New(),
 	}
