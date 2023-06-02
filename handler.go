@@ -17,11 +17,11 @@
 package netty
 
 import (
+	"bytes"
 	"fmt"
 	"io"
 	"io/ioutil"
 	"os"
-	"runtime/debug"
 	"sync"
 	"time"
 
@@ -166,6 +166,8 @@ func (headHandler) HandleWrite(ctx OutboundContext, message Message) {
 		dataBytes = [][]byte{m}
 	case [][]byte:
 		dataBytes = m
+	case *bytes.Buffer:
+		dataBytes = [][]byte{m.Bytes()}
 	case io.Reader:
 		data := utils.AssertBytes(ioutil.ReadAll(m))
 		dataBytes = [][]byte{data}
@@ -187,9 +189,12 @@ type tailHandler struct{}
 
 func (tailHandler) HandleException(ctx ExceptionContext, ex Exception) {
 	// The final closing operation will be provided when the user registered handler is not processing.
-	ex.PrintStackTrace(os.Stderr, "An HandleException() event was fired, and it reached at the tail of the pipeline. ",
-		"It usually means the last handler in the pipeline did not handle the exception. ",
-		fmt.Sprintf("We will close the channel(%d: %s), If you don't want to close the channel please add HandleException() to the pipeline.\n", ctx.Channel().ID(), ctx.Channel().RemoteAddr()),
+	fmt.Fprintln(os.Stderr,
+		"An HandleException() event was fired, and it reached at the tail of the pipeline.",
+		"It usually means the last handler in the pipeline did not handle the exception.",
+		"We will close the channel, If you don't want to close the channel please add HandleException() to the pipeline.\n",
+		"Exception throw on ", ctx.Channel().RemoteAddr(), "\n",
+		ex,
 	)
 	ctx.Channel().Close(ex)
 }
@@ -294,7 +299,7 @@ func (r *readIdleHandler) onReadTimeout() {
 			// capture exception.
 			defer func() {
 				if err := recover(); nil != err {
-					ctx.Channel().Pipeline().FireChannelException(AsException(err, debug.Stack()))
+					ctx.Channel().Pipeline().FireChannelException(AsException(err))
 				}
 			}()
 
@@ -394,7 +399,7 @@ func (w *writeIdleHandler) onWriteTimeout() {
 			// capture exception
 			defer func() {
 				if err := recover(); nil != err {
-					ctx.Channel().Pipeline().FireChannelException(AsException(err, debug.Stack()))
+					ctx.Channel().Pipeline().FireChannelException(AsException(err))
 				}
 			}()
 

@@ -83,13 +83,13 @@ type Factory interface {
 // Schemes to define scheme list
 type Schemes []string
 
-// FixedURL to fix scheme
-func (ss Schemes) FixedURL(u *url.URL) error {
+// FixScheme to fix scheme
+func (ss Schemes) FixScheme(u *url.URL) error {
 	switch {
 	case "" == u.Scheme:
 		u.Scheme = ss[0]
 	case !ss.Valid(u.Scheme):
-		return fmt.Errorf("invalid scheme, %s, available: %v", u.Scheme, ss)
+		return fmt.Errorf("unexpected scheme: %s, available: %v", u.Scheme, ss)
 	}
 	return nil
 }

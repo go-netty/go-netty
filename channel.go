@@ -20,7 +20,6 @@ import (
 	"context"
 	"errors"
 	"net"
-	"runtime/debug"
 	"sync"
 	"sync/atomic"
 
@@ -34,7 +33,7 @@ type Channel interface {
 	ID() int64
 
 	// Write a message through the Pipeline
-	Write(Message) bool
+	Write(Message) error
 
 	// Trigger user event
 	Trigger(event Event)
@@ -75,43 +74,46 @@ type Channel interface {
 
 // NewChannel create a ChannelFactory
 func NewChannel(capacity int) ChannelFactory {
-	return func(id int64, ctx context.Context, pipeline Pipeline, transport transport.Transport) Channel {
-		return newChannelWith(ctx, pipeline, transport, id, capacity)
-	}
-}
-
-// NewBufferedChannel create a ChannelFactory with buffered transport
-func NewBufferedChannel(capacity int, sizeRead int) ChannelFactory {
-	return func(id int64, ctx context.Context, pipeline Pipeline, tran transport.Transport) Channel {
-		tran = transport.BufferedTransport(tran, sizeRead)
-		return newChannelWith(ctx, pipeline, tran, id, capacity)
+	return func(id int64, ctx context.Context, pipeline Pipeline, transport transport.Transport, executor Executor) Channel {
+		return newChannelWith(ctx, pipeline, transport, executor, id, capacity)
 	}
 }
 
 // newChannelWith internal method for NewChannel & NewBufferedChannel
-func newChannelWith(ctx context.Context, pipeline Pipeline, transport transport.Transport, id int64, capacity int) Channel {
+func newChannelWith(ctx context.Context, pipeline Pipeline, transport transport.Transport, executor Executor, id int64, capacity int) Channel {
 	childCtx, cancel := context.WithCancel(ctx)
 	return &channel{
-		id:        id,
-		ctx:       childCtx,
-		cancel:    cancel,
-		pipeline:  pipeline,
-		transport: transport,
-		sendQueue: make(chan [][]byte, capacity),
+		id:           id,
+		ctx:          childCtx,
+		cancel:       cancel,
+		pipeline:     pipeline,
+		transport:    transport,
+		executor:     executor,
+		sendQueue:    utils.NewRingBuffer(uint64(capacity)),
+		writeBuffers: make(net.Buffers, 0, capacity/3+8),
+		writeIndexes: make([]int, 0, capacity/3+8),
 	}
 }
 
+const idle = 0
+const running = 1
+
 // implement of Channel
 type channel struct {
-	id         int64
-	ctx        context.Context
-	cancel     context.CancelFunc
-	transport  transport.Transport
-	pipeline   Pipeline
-	attachment Attachment
-	sendQueue  chan [][]byte
-	activeWait sync.WaitGroup
-	closed     int32
+	id           int64
+	ctx          context.Context
+	cancel       context.CancelFunc
+	transport    transport.Transport
+	executor     Executor
+	pipeline     Pipeline
+	attachment   Attachment
+	sendQueue    *utils.RingBuffer
+	writeBuffers net.Buffers
+	writeIndexes []int
+	activeWait   sync.WaitGroup
+	closed       int32
+	running      int32
+	closeErr     error
 }
 
 // ID get channel id
@@ -120,22 +122,22 @@ func (c *channel) ID() int64 {
 }
 
 // Write a message through the Pipeline
-func (c *channel) Write(message Message) bool {
-
-	select {
-	case <-c.ctx.Done():
-		return false
-	default:
-		c.invokeMethod(func() {
-			c.pipeline.FireChannelWrite(message)
-		})
-		return true
+func (c *channel) Write(message Message) error {
+	if !c.IsActive() {
+		select {
+		case <-c.ctx.Done():
+			return c.closeErr
+		}
 	}
+
+	c.invokeMethod(func() {
+		c.pipeline.FireChannelWrite(message)
+	})
+	return nil
 }
 
 // Trigger trigger event
 func (c *channel) Trigger(event Event) {
-
 	c.invokeMethod(func() {
 		c.pipeline.FireChannelEvent(event)
 	})
@@ -144,27 +146,34 @@ func (c *channel) Trigger(event Event) {
 // Close through the Pipeline
 func (c *channel) Close(err error) {
 	if atomic.CompareAndSwapInt32(&c.closed, 0, 1) {
-		c.cancel()
+		c.closeErr = err
+		c.sendQueue.Dispose()
 		c.transport.Close()
+		c.cancel()
 
 		c.invokeMethod(func() {
-			c.pipeline.FireChannelInactive(AsException(err, debug.Stack()))
+			c.pipeline.FireChannelInactive(err)
 		})
 	}
 }
 
 // Writev to write [][]byte for optimize syscall
 func (c *channel) Writev(p [][]byte) (n int64, err error) {
-
-	select {
-	case <-c.ctx.Done():
-		return 0, errors.New("broken pipe")
-	case c.sendQueue <- p:
-		for _, d := range p {
-			n += int64(len(d))
+	if !c.IsActive() {
+		select {
+		case <-c.ctx.Done():
+			return 0, c.closeErr
 		}
-		return
 	}
+	// put packet to send queue
+	if err = c.sendQueue.Put(p); nil != err {
+		return 0, err
+	}
+	// try send
+	if atomic.CompareAndSwapInt32(&c.running, idle, running) {
+		c.executor.Exec(c.writeOnce)
+	}
+	return utils.CountOf(p), nil
 }
 
 // IsActive return true if the Channel is active and so connected
@@ -210,8 +219,7 @@ func (c *channel) Context() context.Context {
 // serveChannel start write & read routines
 func (c *channel) serveChannel() {
 	c.activeWait.Add(1)
-	go c.readLoop()
-	go c.writeLoop()
+	c.executor.Exec(c.readLoop)
 	c.activeWait.Wait()
 }
 
@@ -219,11 +227,11 @@ func (c *channel) invokeMethod(fn func()) {
 
 	defer func() {
 		if err := recover(); nil != err && 0 == atomic.LoadInt32(&c.closed) {
-			c.pipeline.FireChannelException(AsException(err, debug.Stack()))
+			c.pipeline.FireChannelException(AsException(err))
 
 			if e, ok := err.(error); ok {
 				var ne net.Error
-				if errors.As(e, &ne) && !ne.Temporary() {
+				if errors.As(e, &ne) && !ne.Timeout() {
 					c.Close(e)
 				}
 			}
@@ -237,11 +245,7 @@ func (c *channel) invokeMethod(fn func()) {
 func (c *channel) readLoop() {
 
 	defer func() {
-		if err := recover(); nil != err {
-			c.Close(AsException(err, debug.Stack()))
-		} else {
-			c.Close(nil)
-		}
+		c.Close(AsException(recover()))
 	}()
 
 	func() {
@@ -261,56 +265,56 @@ func (c *channel) readLoop() {
 	}
 }
 
-// writeLoop sending message of channel
-func (c *channel) writeLoop() {
+// writeOnce sending messages of channel
+func (c *channel) writeOnce() {
 
 	defer func() {
 		if err := recover(); nil != err {
-			c.Close(AsException(err, debug.Stack()))
-		} else {
-			c.Close(nil)
+			c.Close(AsException(err))
 		}
 	}()
 
-	var bufferCap = cap(c.sendQueue)
-	var buffers = make(net.Buffers, 0, bufferCap)
-	var indexes = make([]int, 0, bufferCap)
-
-	// Try to combine packet sending to optimize sending performance
-	sendWithWritev := func(data [][]byte, queue <-chan [][]byte) (int64, error) {
-
+	for {
 		// reuse buffer.
-		sendBuffers := buffers[:0]
-		sendIndexes := indexes[:0]
+		sendBuffers := c.writeBuffers[:0]
+		sendIndexes := c.writeIndexes[:0]
 
-		// append first packet.
-		sendBuffers = append(sendBuffers, data...)
-		sendIndexes = append(sendIndexes, len(sendBuffers))
+		// more packet will be merged
+		for c.sendQueue.Len() > 0 && len(sendBuffers) < cap(sendBuffers) {
+			// poll packet
+			item, err := c.sendQueue.Poll(-1)
+			if nil != err {
+				break
+			}
 
-		// more packet will be merged.
-		for {
-			select {
-			case data := <-queue:
-				sendBuffers = append(sendBuffers, data...)
-				sendIndexes = append(sendIndexes, len(sendBuffers))
-				if len(sendIndexes) >= bufferCap {
-					return c.transport.Writev(transport.Buffers{Buffers: sendBuffers, Indexes: sendIndexes})
+			// combine send bytes to reduce syscall.
+			pkts := item.([][]byte)
+			sendBuffers = append(sendBuffers, pkts...)
+			sendIndexes = append(sendIndexes, len(sendBuffers))
+		}
+
+		if len(sendBuffers) > 0 {
+			utils.AssertLong(c.transport.Writev(transport.Buffers{Buffers: sendBuffers, Indexes: sendIndexes}))
+			utils.Assert(c.transport.Flush())
+
+			// clear buffer ref
+			for index := range sendBuffers {
+				sendBuffers[index] = nil // avoid memory leak
+				if index < len(sendIndexes) {
+					sendIndexes[index] = -1 // for safety
 				}
-			default:
-				return c.transport.Writev(transport.Buffers{Buffers: sendBuffers, Indexes: sendIndexes})
 			}
 		}
-	}
 
-	for {
-		select {
-		case buf := <-c.sendQueue:
-			// combine send bytes to reduce syscall.
-			utils.AssertLong(sendWithWritev(buf, c.sendQueue))
-			// flush buffer
-			utils.Assert(c.transport.Flush())
-		case <-c.ctx.Done():
-			return
+		// double check
+		atomic.StoreInt32(&c.running, idle)
+		if size := c.sendQueue.Len(); size > 0 {
+			if atomic.CompareAndSwapInt32(&c.running, idle, running) {
+				continue
+			}
 		}
+
+		// no packets to send
+		break
 	}
 }

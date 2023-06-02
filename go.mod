@@ -1,3 +1,3 @@
 module github.com/go-netty/go-netty
 
-go 1.13
+go 1.16

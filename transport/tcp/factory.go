@@ -37,7 +37,7 @@ func (*tcpFactory) Schemes() transport.Schemes {
 
 func (f *tcpFactory) Connect(options *transport.Options) (transport.Transport, error) {
 
-	if err := f.Schemes().FixedURL(options.Address); nil != err {
+	if err := f.Schemes().FixScheme(options.Address); nil != err {
 		return nil, err
 	}
 
@@ -48,13 +48,12 @@ func (f *tcpFactory) Connect(options *transport.Options) (transport.Transport, e
 	if nil != err {
 		return nil, err
 	}
-
-	return (&tcpTransport{TCPConn: conn.(*net.TCPConn)}).applyOptions(tcpOptions, true)
+	return newTcpTransport(conn.(*net.TCPConn), tcpOptions, true)
 }
 
 func (f *tcpFactory) Listen(options *transport.Options) (transport.Acceptor, error) {
 
-	if err := f.Schemes().FixedURL(options.Address); nil != err {
+	if err := f.Schemes().FixScheme(options.Address); nil != err {
 		return nil, err
 	}
 
@@ -83,7 +82,7 @@ func (t *tcpAcceptor) Accept() (transport.Transport, error) {
 				return nil, err // listener closed
 			}
 
-			if ne, ok := err.(net.Error); ok && ne.Temporary() {
+			if ne, ok := err.(net.Error); ok && ne.Timeout() {
 				if tempDelay == 0 {
 					tempDelay = 5 * time.Millisecond
 				} else {
@@ -98,7 +97,7 @@ func (t *tcpAcceptor) Accept() (transport.Transport, error) {
 			return nil, err
 		}
 
-		return (&tcpTransport{TCPConn: conn}).applyOptions(t.options, false)
+		return newTcpTransport(conn, t.options, false)
 	}
 }
 

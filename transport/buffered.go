@@ -16,26 +16,52 @@
 
 package transport
 
-import "bufio"
+import (
+	"bufio"
+	"net"
+	"time"
+)
 
-// BufferedTransport for optimize system calls with bufio.Reader
-func BufferedTransport(transport Transport, sizeRead int) Transport {
-	switch transport.(type) {
-	case *bufferedTransport:
-		return transport
-	default:
-		return &bufferedTransport{
-			Transport: transport,
-			reader:    bufio.NewReaderSize(transport, sizeRead),
-		}
-	}
+type Buffered = Transport
+
+func NewBuffered(conn net.Conn, readSize, writeSize int) Buffered {
+	return &bufConn{conn: conn, ReadWriter: bufio.NewReadWriter(bufio.NewReaderSize(conn, readSize), bufio.NewWriterSize(conn, writeSize))}
 }
 
-type bufferedTransport struct {
-	Transport
-	reader *bufio.Reader
+type bufConn struct {
+	*bufio.ReadWriter
+	conn net.Conn
 }
 
-func (bt *bufferedTransport) Read(b []byte) (int, error) {
-	return bt.reader.Read(b)
+func (b *bufConn) Close() error {
+	_ = b.Flush()
+	return b.conn.Close()
+}
+
+func (b *bufConn) LocalAddr() net.Addr {
+	return b.conn.LocalAddr()
+}
+
+func (b *bufConn) RemoteAddr() net.Addr {
+	return b.conn.RemoteAddr()
+}
+
+func (b *bufConn) SetDeadline(t time.Time) error {
+	return b.conn.SetDeadline(t)
+}
+
+func (b *bufConn) SetReadDeadline(t time.Time) error {
+	return b.conn.SetReadDeadline(t)
+}
+
+func (b *bufConn) SetWriteDeadline(t time.Time) error {
+	return b.conn.SetWriteDeadline(t)
+}
+
+func (b *bufConn) Writev(buffs Buffers) (int64, error) {
+	return buffs.Buffers.WriteTo(b)
+}
+
+func (b *bufConn) RawTransport() interface{} {
+	return b.conn
 }

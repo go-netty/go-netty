@@ -16,8 +16,6 @@
 
 package netty
 
-import "runtime/debug"
-
 type (
 	// HandlerContext defines a base handler context
 	HandlerContext interface {
@@ -110,7 +108,7 @@ func (hc *handlerContext) Write(message Message) {
 
 	defer func() {
 		if err := recover(); nil != err {
-			hc.Channel().Pipeline().FireChannelException(AsException(err, debug.Stack()))
+			hc.Channel().Pipeline().FireChannelException(AsException(err))
 		}
 	}()
 
@@ -132,7 +130,7 @@ func (hc *handlerContext) Trigger(event Event) {
 
 	defer func() {
 		if err := recover(); nil != err {
-			hc.Channel().Pipeline().FireChannelException(AsException(err, debug.Stack()))
+			hc.Channel().Pipeline().FireChannelException(AsException(err))
 		}
 	}()
 

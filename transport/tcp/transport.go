@@ -23,48 +23,40 @@ import (
 )
 
 type tcpTransport struct {
-	*net.TCPConn
+	transport.Buffered
+	client bool
 }
 
-func (t *tcpTransport) Writev(buffs transport.Buffers) (int64, error) {
-	return buffs.Buffers.WriteTo(t.TCPConn)
-}
+func newTcpTransport(conn *net.TCPConn, tcpOptions *Options, client bool) (*tcpTransport, error) {
 
-func (t *tcpTransport) Flush() error {
-	return nil
-}
-
-func (t *tcpTransport) RawTransport() interface{} {
-	return t.TCPConn
-}
-
-func (t *tcpTransport) applyOptions(tcpOptions *Options, client bool) (*tcpTransport, error) {
-
-	if err := t.SetKeepAlive(tcpOptions.KeepAlive); nil != err {
-		return t, err
+	if err := conn.SetKeepAlive(tcpOptions.KeepAlive); nil != err {
+		return nil, err
 	}
 
-	if err := t.SetKeepAlivePeriod(tcpOptions.KeepAlivePeriod); nil != err {
-		return t, err
+	if err := conn.SetKeepAlivePeriod(tcpOptions.KeepAlivePeriod); nil != err {
+		return nil, err
 	}
 
-	if err := t.SetLinger(tcpOptions.Linger); nil != err {
-		return t, err
+	if err := conn.SetLinger(tcpOptions.Linger); nil != err {
+		return nil, err
 	}
 
-	if err := t.SetNoDelay(tcpOptions.NoDelay); nil != err {
-		return t, err
+	if err := conn.SetNoDelay(tcpOptions.NoDelay); nil != err {
+		return nil, err
 	}
 
 	if tcpOptions.SockBuf > 0 {
-		if err := t.SetReadBuffer(tcpOptions.SockBuf); nil != err {
-			return t, err
+		if err := conn.SetReadBuffer(tcpOptions.SockBuf); nil != err {
+			return nil, err
 		}
 
-		if err := t.SetWriteBuffer(tcpOptions.SockBuf); nil != err {
-			return t, err
+		if err := conn.SetWriteBuffer(tcpOptions.SockBuf); nil != err {
+			return nil, err
 		}
 	}
 
-	return t, nil
+	return &tcpTransport{
+		Buffered: transport.NewBuffered(conn, tcpOptions.ReadBufferSize, tcpOptions.WriteBufferSize),
+		client:   client,
+	}, nil
 }

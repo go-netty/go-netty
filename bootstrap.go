@@ -30,7 +30,7 @@ type Bootstrap interface {
 	// Context return context
 	Context() context.Context
 	// Listen create a listener
-	Listen(url string, option ...transport.Option) Listener
+	Listen(url string, attachment Attachment, option ...transport.Option) Listener
 	// Connect to remote endpoint
 	Connect(url string, attachment Attachment, option ...transport.Option) (Channel, error)
 	// Shutdown boostrap
@@ -43,8 +43,9 @@ func NewBootstrap(option ...Option) Bootstrap {
 	opts := &bootstrapOptions{
 		channelIDFactory: SequenceID(),
 		pipelineFactory:  NewPipeline,
-		channelFactory:   NewChannel(128),
+		channelFactory:   NewChannel(64),
 		transportFactory: tcp.New(),
+		executor:         AsyncExecutor(),
 	}
 	opts.bootstrapCtx, opts.bootstrapCancel = context.WithCancel(context.Background())
 
@@ -67,7 +68,7 @@ func (bs *bootstrap) Context() context.Context {
 }
 
 // serveTransport to serve channel
-func (bs *bootstrap) serveTransport(transport transport.Transport, attachment Attachment, childChannel bool) Channel {
+func (bs *bootstrap) serveTransport(ctx context.Context, transport transport.Transport, attachment Attachment, childChannel bool) Channel {
 
 	// create a new pipeline
 	pl := bs.pipelineFactory()
@@ -76,7 +77,7 @@ func (bs *bootstrap) serveTransport(transport transport.Transport, attachment At
 	cid := bs.channelIDFactory()
 
 	// create a channel
-	ch := bs.channelFactory(cid, bs.bootstrapCtx, pl, transport)
+	ch := bs.channelFactory(cid, ctx, pl, transport, bs.executor)
 
 	// set the attachment if necessary
 	if nil != attachment {
@@ -110,12 +111,12 @@ func (bs *bootstrap) Connect(url string, attachment Attachment, option ...transp
 	}
 
 	// serve client transport
-	return bs.serveTransport(t, attachment, false), nil
+	return bs.serveTransport(options.Context, t, attachment, false), nil
 }
 
 // Listen to the address with options
-func (bs *bootstrap) Listen(url string, option ...transport.Option) Listener {
-	l := &listener{bs: bs, url: url, option: option}
+func (bs *bootstrap) Listen(url string, attachment Attachment, option ...transport.Option) Listener {
+	l := &listener{bs: bs, url: url, attachment: attachment, option: option}
 	bs.listeners.Store(url, l)
 	return l
 }
@@ -146,11 +147,12 @@ type Listener interface {
 
 // impl Listener
 type listener struct {
-	bs       *bootstrap
-	url      string
-	option   []transport.Option
-	options  *transport.Options
-	acceptor transport.Acceptor
+	bs         *bootstrap
+	url        string
+	attachment Attachment
+	option     []transport.Option
+	options    *transport.Options
+	acceptor   transport.Acceptor
 }
 
 // Close listener
@@ -191,14 +193,14 @@ func (l *listener) Sync() error {
 			return t.Close()
 		default:
 			// serve child transport
-			l.bs.serveTransport(t, nil, true)
+			l.bs.serveTransport(l.options.Context, t, l.attachment, true)
 		}
 	}
 }
 
 // Async accept new transport from listener
 func (l *listener) Async(fn func(err error)) {
-	go func() {
+	l.bs.executor.Exec(func() {
 		fn(l.Sync())
-	}()
+	})
 }

@@ -19,25 +19,25 @@ package frame
 import (
 	"bytes"
 	"fmt"
-	"github.com/go-netty/go-netty"
-	"github.com/go-netty/go-netty/utils"
 	"strings"
 	"testing"
+
+	"github.com/go-netty/go-netty"
+	"github.com/go-netty/go-netty/utils"
 )
 
 func TestPacketCodec(t *testing.T) {
 
 	var cases = []struct {
-		maxFrameLen int
-		input       []byte
-		output      interface{}
+		input  []byte
+		output interface{}
 	}{
-		{maxFrameLen: 1024, output: []byte("123456789")},
-		{maxFrameLen: 1024, output: strings.NewReader("123456789")},
+		{output: []byte("123456789")},
+		{output: strings.NewReader("123456789")},
 	}
 
 	for index, c := range cases {
-		codec := PacketCodec(c.maxFrameLen)
+		codec := PacketCodec(128)
 		t.Run(fmt.Sprint(codec.CodecName(), "#", index), func(t *testing.T) {
 			ctx := MockHandlerContext{
 				MockHandleRead: func(message netty.Message) {

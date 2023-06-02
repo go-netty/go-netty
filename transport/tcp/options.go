@@ -40,6 +40,8 @@ type Options struct {
 	Linger          int           `json:"linger,string"`
 	NoDelay         bool          `json:"nodelay,string"`
 	SockBuf         int           `json:"sockbuf,string"`
+	ReadBufferSize  int           `json:"readBufferSize"`
+	WriteBufferSize int           `json:"writeBufferSize"`
 }
 
 type contextKey struct{}

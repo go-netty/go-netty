@@ -27,7 +27,7 @@ type (
 	// ChannelInitializer to init the pipeline of channel
 	ChannelInitializer func(Channel)
 	// ChannelFactory to create a channel
-	ChannelFactory func(id int64, ctx context.Context, pipeline Pipeline, transport transport.Transport) Channel
+	ChannelFactory func(id int64, ctx context.Context, pipeline Pipeline, transport transport.Transport, executor Executor) Channel
 	// PipelineFactory to create pipeline
 	PipelineFactory func() Pipeline
 	// TransportFactory tp create transport
@@ -45,6 +45,7 @@ type (
 		channelFactory    ChannelFactory
 		pipelineFactory   PipelineFactory
 		channelIDFactory  ChannelIDFactory
+		executor          Executor
 	}
 )
 
@@ -104,5 +105,12 @@ func WithChildInitializer(initializer ChannelInitializer) Option {
 func WithClientInitializer(initializer ChannelInitializer) Option {
 	return func(options *bootstrapOptions) {
 		options.clientInitializer = initializer
+	}
+}
+
+// WithExecutor use custom Executor
+func WithExecutor(executor Executor) Option {
+	return func(options *bootstrapOptions) {
+		options.executor = executor
 	}
 }

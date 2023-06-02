@@ -50,7 +50,6 @@ func TestBootstrap(t *testing.T) {
 	}
 
 	bs := NewBootstrap(
-		WithChannel(NewBufferedChannel(128, 1024)),
 		WithChildInitializer(pipelineInitializer),
 		WithClientInitializer(pipelineInitializer),
 		WithTransport(tcp.New()),

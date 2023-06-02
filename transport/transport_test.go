@@ -46,7 +46,7 @@ func TestSchemes(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err := schemes.FixedURL(u); nil != err || u.Scheme != "tcp" {
+	if err := schemes.FixScheme(u); nil != err || u.Scheme != "tcp" {
 		t.Fatal(err, u.Scheme)
 	}
 
