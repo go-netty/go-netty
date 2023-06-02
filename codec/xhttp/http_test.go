@@ -75,7 +75,7 @@ func TestServerCodec(t *testing.T) {
 
 	wg.Add(1)
 
-	channel, err := bootstrap.Connect("127.0.0.1:9526", nil)
+	channel, err := bootstrap.Connect("127.0.0.1:9526")
 	if nil != err {
 		t.Fatal(err)
 	}

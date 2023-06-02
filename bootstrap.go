@@ -30,9 +30,9 @@ type Bootstrap interface {
 	// Context return context
 	Context() context.Context
 	// Listen create a listener
-	Listen(url string, attachment Attachment, option ...transport.Option) Listener
+	Listen(url string, option ...transport.Option) Listener
 	// Connect to remote endpoint
-	Connect(url string, attachment Attachment, option ...transport.Option) (Channel, error)
+	Connect(url string, option ...transport.Option) (Channel, error)
 	// Shutdown boostrap
 	Shutdown()
 }
@@ -97,7 +97,7 @@ func (bs *bootstrap) serveTransport(ctx context.Context, transport transport.Tra
 }
 
 // Connect to the remote server with options
-func (bs *bootstrap) Connect(url string, attachment Attachment, option ...transport.Option) (Channel, error) {
+func (bs *bootstrap) Connect(url string, option ...transport.Option) (Channel, error) {
 
 	options, err := transport.ParseOptions(bs.Context(), url, option...)
 	if nil != err {
@@ -111,12 +111,12 @@ func (bs *bootstrap) Connect(url string, attachment Attachment, option ...transp
 	}
 
 	// serve client transport
-	return bs.serveTransport(options.Context, t, attachment, false), nil
+	return bs.serveTransport(options.Context, t, options.Attachment, false), nil
 }
 
 // Listen to the address with options
-func (bs *bootstrap) Listen(url string, attachment Attachment, option ...transport.Option) Listener {
-	l := &listener{bs: bs, url: url, attachment: attachment, option: option}
+func (bs *bootstrap) Listen(url string, option ...transport.Option) Listener {
+	l := &listener{bs: bs, url: url, option: option}
 	bs.listeners.Store(url, l)
 	return l
 }
@@ -147,12 +147,11 @@ type Listener interface {
 
 // impl Listener
 type listener struct {
-	bs         *bootstrap
-	url        string
-	attachment Attachment
-	option     []transport.Option
-	options    *transport.Options
-	acceptor   transport.Acceptor
+	bs       *bootstrap
+	url      string
+	option   []transport.Option
+	options  *transport.Options
+	acceptor transport.Acceptor
 }
 
 // Close listener
@@ -193,7 +192,7 @@ func (l *listener) Sync() error {
 			return t.Close()
 		default:
 			// serve child transport
-			l.bs.serveTransport(l.options.Context, t, l.attachment, true)
+			l.bs.serveTransport(l.options.Context, t, l.options.Attachment, true)
 		}
 	}
 }

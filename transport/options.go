@@ -37,6 +37,9 @@ type Options struct {
 
 	// Other configure pass by context.WithValue
 	Context context.Context
+
+	// Attachment defines the object or data associated with the Channel
+	Attachment interface{}
 }
 
 // AddressWithoutHost convert host:port to :port
@@ -86,6 +89,14 @@ func withAddress(address string) Option {
 func WithContext(ctx context.Context) Option {
 	return func(options *Options) error {
 		options.Context = ctx
+		return nil
+	}
+}
+
+// WithAttachment a data associated with the Channel
+func WithAttachment(attachment interface{}) Option {
+	return func(options *Options) error {
+		options.Attachment = attachment
 		return nil
 	}
 }

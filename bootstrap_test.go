@@ -25,6 +25,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/go-netty/go-netty/transport"
 	"github.com/go-netty/go-netty/transport/tcp"
 	"github.com/go-netty/go-netty/utils"
 )
@@ -61,7 +62,7 @@ func TestBootstrap(t *testing.T) {
 		}
 	})
 
-	ch, err := bs.Connect("tcp://127.0.0.1:9527", "go-netty")
+	ch, err := bs.Connect("tcp://127.0.0.1:9527", transport.WithAttachment("go-netty"))
 	if nil != err {
 		t.Fatal(err)
 	}
