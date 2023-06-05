@@ -35,11 +35,11 @@ var DefaultOption = &Options{
 // Options fot tcp transport
 type Options struct {
 	Timeout         time.Duration `json:"timeout"`
-	KeepAlive       bool          `json:"keep-alive,string"`
+	KeepAlive       bool          `json:"keep-alive"`
 	KeepAlivePeriod time.Duration `json:"keep-alive-period"`
-	Linger          int           `json:"linger,string"`
-	NoDelay         bool          `json:"nodelay,string"`
-	SockBuf         int           `json:"sockbuf,string"`
+	Linger          int           `json:"linger"`
+	NoDelay         bool          `json:"nodelay"`
+	SockBuf         int           `json:"sockbuf"`
 	ReadBufferSize  int           `json:"readBufferSize"`
 	WriteBufferSize int           `json:"writeBufferSize"`
 }

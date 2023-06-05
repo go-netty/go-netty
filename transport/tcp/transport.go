@@ -23,7 +23,7 @@ import (
 )
 
 type tcpTransport struct {
-	transport.Buffered
+	transport.Transport
 	client bool
 }
 
@@ -56,7 +56,7 @@ func newTcpTransport(conn *net.TCPConn, tcpOptions *Options, client bool) (*tcpT
 	}
 
 	return &tcpTransport{
-		Buffered: transport.NewBuffered(conn, tcpOptions.ReadBufferSize, tcpOptions.WriteBufferSize),
-		client:   client,
+		Transport: transport.NewTransport(conn, tcpOptions.ReadBufferSize, tcpOptions.WriteBufferSize),
+		client:    client,
 	}, nil
 }

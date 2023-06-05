@@ -175,14 +175,7 @@ func (headHandler) HandleWrite(ctx OutboundContext, message Message) {
 		panic(fmt.Errorf("unsupported type: %T", m))
 	}
 
-	writeN, err := ctx.Channel().Writev(dataBytes)
-	if totalN := utils.CountOf(dataBytes); totalN != writeN && nil == err {
-		err = fmt.Errorf("short write: %d != %d", totalN, writeN)
-	}
-
-	if nil != err {
-		panic(err)
-	}
+	utils.AssertLong(ctx.Channel().Writev(dataBytes))
 }
 
 type tailHandler struct{}

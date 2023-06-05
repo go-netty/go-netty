@@ -73,7 +73,14 @@ type Channel interface {
 }
 
 // NewChannel create a ChannelFactory
-func NewChannel(capacity int) ChannelFactory {
+func NewChannel() ChannelFactory {
+	return func(id int64, ctx context.Context, pipeline Pipeline, transport transport.Transport, executor Executor) Channel {
+		return newChannelWith(ctx, pipeline, transport, executor, id, 0)
+	}
+}
+
+// NewAsyncWriteChannel create an async write ChannelFactory
+func NewAsyncWriteChannel(capacity int) ChannelFactory {
 	return func(id int64, ctx context.Context, pipeline Pipeline, transport transport.Transport, executor Executor) Channel {
 		return newChannelWith(ctx, pipeline, transport, executor, id, capacity)
 	}
@@ -82,6 +89,20 @@ func NewChannel(capacity int) ChannelFactory {
 // newChannelWith internal method for NewChannel & NewBufferedChannel
 func newChannelWith(ctx context.Context, pipeline Pipeline, transport transport.Transport, executor Executor, id int64, capacity int) Channel {
 	childCtx, cancel := context.WithCancel(ctx)
+
+	var (
+		sendQueue    *utils.RingBuffer
+		writeBuffers net.Buffers
+		writeIndexes []int
+	)
+
+	// enable async write
+	if capacity > 0 {
+		sendQueue = utils.NewRingBuffer(uint64(capacity))
+		writeBuffers = make(net.Buffers, 0, (capacity/5)*2+1)
+		writeIndexes = make([]int, 0, capacity/5+1)
+	}
+
 	return &channel{
 		id:           id,
 		ctx:          childCtx,
@@ -89,9 +110,9 @@ func newChannelWith(ctx context.Context, pipeline Pipeline, transport transport.
 		pipeline:     pipeline,
 		transport:    transport,
 		executor:     executor,
-		sendQueue:    utils.NewRingBuffer(uint64(capacity)),
-		writeBuffers: make(net.Buffers, 0, capacity/3+8),
-		writeIndexes: make([]int, 0, capacity/3+8),
+		sendQueue:    sendQueue,
+		writeBuffers: writeBuffers,
+		writeIndexes: writeIndexes,
 	}
 }
 
@@ -114,6 +135,7 @@ type channel struct {
 	closed       int32
 	running      int32
 	closeErr     error
+	writeLock    sync.Mutex // for sync write
 }
 
 // ID get channel id
@@ -147,9 +169,12 @@ func (c *channel) Trigger(event Event) {
 func (c *channel) Close(err error) {
 	if atomic.CompareAndSwapInt32(&c.closed, 0, 1) {
 		c.closeErr = err
-		c.sendQueue.Dispose()
 		c.transport.Close()
 		c.cancel()
+
+		if nil != c.sendQueue {
+			c.sendQueue.Dispose()
+		}
 
 		c.invokeMethod(func() {
 			c.pipeline.FireChannelInactive(err)
@@ -165,15 +190,27 @@ func (c *channel) Writev(p [][]byte) (n int64, err error) {
 			return 0, c.closeErr
 		}
 	}
-	// put packet to send queue
-	if err = c.sendQueue.Put(p); nil != err {
-		return 0, err
+
+	// enable async write
+	if nil != c.sendQueue {
+		// put packet to send queue
+		if err = c.sendQueue.Put(p); nil != err {
+			return 0, err
+		}
+		// try send
+		if atomic.CompareAndSwapInt32(&c.running, idle, running) {
+			c.executor.Exec(c.writeOnce)
+		}
+		return utils.CountOf(p), nil
 	}
-	// try send
-	if atomic.CompareAndSwapInt32(&c.running, idle, running) {
-		c.executor.Exec(c.writeOnce)
+
+	// sync write
+	c.writeLock.Lock()
+	defer c.writeLock.Unlock()
+	if n, err = c.transport.Writev(transport.Buffers{Buffers: p, Indexes: []int{len(p)}}); nil == err {
+		err = c.transport.Flush()
 	}
-	return utils.CountOf(p), nil
+	return
 }
 
 // IsActive return true if the Channel is active and so connected
