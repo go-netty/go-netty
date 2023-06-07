@@ -116,6 +116,9 @@ func (bs *bootstrap) Connect(url string, option ...transport.Option) (Channel, e
 
 // Listen to the address with options
 func (bs *bootstrap) Listen(url string, option ...transport.Option) Listener {
+	if _, ok := bs.listeners.Load(url); ok {
+		panic(fmt.Errorf("duplicate listener: %s", url))
+	}
 	l := &listener{bs: bs, url: url, option: option}
 	bs.listeners.Store(url, l)
 	return l
@@ -126,7 +129,7 @@ func (bs *bootstrap) Shutdown() {
 	bs.bootstrapCancel()
 
 	bs.listeners.Range(func(key, value interface{}) bool {
-		value.(Listener).Close()
+		_ = value.(Listener).Close()
 		return true
 	})
 }
@@ -186,14 +189,7 @@ func (l *listener) Sync() error {
 			return err
 		}
 
-		select {
-		case <-l.bs.Context().Done():
-			// bootstrap has been closed
-			return t.Close()
-		default:
-			// serve child transport
-			l.bs.serveTransport(l.options.Context, t, l.options.Attachment, true)
-		}
+		l.bs.serveTransport(l.options.Context, t, l.options.Attachment, true)
 	}
 }
 

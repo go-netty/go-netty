@@ -52,8 +52,6 @@ func (r *byteReader) ReadByte() (byte, error) {
 func ToReader(message interface{}) (io.Reader, error) {
 
 	switch r := message.(type) {
-	case io.Reader:
-		return r, nil
 	case []byte:
 		return bytes.NewReader(r), nil
 	case [][]byte:
@@ -64,6 +62,8 @@ func ToReader(message interface{}) (io.Reader, error) {
 		return io.MultiReader(readers...), nil
 	case string:
 		return strings.NewReader(r), nil
+	case io.Reader:
+		return r, nil
 	default:
 		return nil, fmt.Errorf("unrecognized type: %T", message)
 	}
@@ -82,18 +82,26 @@ func MustToReader(message interface{}) io.Reader {
 func ToBytes(message interface{}) ([]byte, error) {
 
 	switch r := message.(type) {
-	case io.Reader:
-		return ioutil.ReadAll(r)
 	case []byte:
 		return r, nil
 	case [][]byte:
-		buffer := bytes.NewBuffer(nil)
+		buffer := bytes.NewBuffer(make([]byte, 0, CountOf(r)))
 		for _, b := range r {
 			buffer.Write(b)
 		}
 		return buffer.Bytes(), nil
 	case string:
 		return []byte(r), nil
+	case *bytes.Buffer:
+		return r.Bytes(), nil
+	case *bytes.Reader:
+		return StealBytes(r)
+	case *strings.Reader:
+		return StealBytes(r)
+	case io.WriterTo:
+		return StealBytes(r)
+	case io.Reader:
+		return ioutil.ReadAll(r)
 	default:
 		return nil, fmt.Errorf("unrecognized type: %T", message)
 	}
@@ -114,4 +122,33 @@ func CountOf(buffs [][]byte) (n int64) {
 		n += int64(len(buff))
 	}
 	return
+}
+
+// ByteStealer steal from io.Reader
+type ByteStealer struct {
+	Data []byte
+}
+
+func (s *ByteStealer) Write(p []byte) (n int, err error) {
+	if nil == s.Data {
+		s.Data = p[0:len(p):len(p)]
+	} else {
+		s.Data = append(s.Data, p...)
+	}
+	return len(p), nil
+}
+
+func StealBytes(reader io.WriterTo) ([]byte, error) {
+	var stealer ByteStealer
+	n, err := reader.WriteTo(&stealer)
+	if nil != err {
+		return nil, err
+	}
+
+	// check data length
+	if n != int64(len(stealer.Data)) {
+		return nil, io.ErrShortWrite
+	}
+
+	return stealer.Data, nil
 }

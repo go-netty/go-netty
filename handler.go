@@ -160,22 +160,22 @@ type headHandler struct{}
 
 func (headHandler) HandleWrite(ctx OutboundContext, message Message) {
 
-	var dataBytes [][]byte
 	switch m := message.(type) {
 	case []byte:
-		dataBytes = [][]byte{m}
+		utils.AssertLength(ctx.Channel().Write1(m))
 	case [][]byte:
-		dataBytes = m
+		utils.AssertLong(ctx.Channel().Writev(m))
 	case *bytes.Buffer:
-		dataBytes = [][]byte{m.Bytes()}
+		utils.AssertLength(ctx.Channel().Write1(m.Bytes()))
+	case io.WriterTo:
+		data := utils.AssertBytes(utils.StealBytes(m))
+		utils.AssertLength(ctx.Channel().Write1(data))
 	case io.Reader:
 		data := utils.AssertBytes(ioutil.ReadAll(m))
-		dataBytes = [][]byte{data}
+		utils.AssertLength(ctx.Channel().Write1(data))
 	default:
 		panic(fmt.Errorf("unsupported type: %T", m))
 	}
-
-	utils.AssertLong(ctx.Channel().Writev(dataBytes))
 }
 
 type tailHandler struct{}

@@ -19,13 +19,19 @@ package netty
 import (
 	"context"
 	"errors"
+	"fmt"
+	"io"
 	"net"
 	"sync"
 	"sync/atomic"
 
 	"github.com/go-netty/go-netty/transport"
 	"github.com/go-netty/go-netty/utils"
+	"github.com/go-netty/go-netty/utils/pool/pbytes"
+	"github.com/go-netty/go-netty/utils/queue"
 )
+
+var ErrAsyncNoSpace = errors.New("async write queue is full")
 
 // Channel is defines a server-side-channel & client-side-channel
 type Channel interface {
@@ -46,6 +52,9 @@ type Channel interface {
 
 	// Writev to write [][]byte for optimize syscall
 	Writev([][]byte) (int64, error)
+
+	// Write1 to write []byte to channel
+	Write1(p []byte) (n int, err error)
 
 	// LocalAddr local address
 	LocalAddr() string
@@ -91,14 +100,14 @@ func newChannelWith(ctx context.Context, pipeline Pipeline, transport transport.
 	childCtx, cancel := context.WithCancel(ctx)
 
 	var (
-		sendQueue    *utils.RingBuffer
+		sendQueue    *queue.RingBuffer
 		writeBuffers net.Buffers
 		writeIndexes []int
 	)
 
 	// enable async write
 	if capacity > 0 {
-		sendQueue = utils.NewRingBuffer(uint64(capacity))
+		sendQueue = queue.NewRingBuffer(uint64(capacity))
 		writeBuffers = make(net.Buffers, 0, (capacity/5)*2+1)
 		writeIndexes = make([]int, 0, capacity/5+1)
 	}
@@ -128,7 +137,7 @@ type channel struct {
 	executor     Executor
 	pipeline     Pipeline
 	attachment   Attachment
-	sendQueue    *utils.RingBuffer
+	sendQueue    *queue.RingBuffer
 	writeBuffers net.Buffers
 	writeIndexes []int
 	activeWait   sync.WaitGroup
@@ -193,15 +202,7 @@ func (c *channel) Writev(p [][]byte) (n int64, err error) {
 
 	// enable async write
 	if nil != c.sendQueue {
-		// put packet to send queue
-		if err = c.sendQueue.Put(p); nil != err {
-			return 0, err
-		}
-		// try send
-		if atomic.CompareAndSwapInt32(&c.running, idle, running) {
-			c.executor.Exec(c.writeOnce)
-		}
-		return utils.CountOf(p), nil
+		return c.asyncWrite(p)
 	}
 
 	// sync write
@@ -211,6 +212,72 @@ func (c *channel) Writev(p [][]byte) (n int64, err error) {
 		err = c.transport.Flush()
 	}
 	return
+}
+
+// Write1 to write []byte to channel
+func (c *channel) Write1(p []byte) (n int, err error) {
+	if !c.IsActive() {
+		select {
+		case <-c.ctx.Done():
+			return 0, c.closeErr
+		}
+	}
+
+	// enable async write
+	if nil != c.sendQueue {
+		wn, err := c.asyncWrite([][]byte{p})
+		return int(wn), err
+	}
+
+	// sync write
+	c.writeLock.Lock()
+	defer c.writeLock.Unlock()
+	if n, err = c.transport.Write(p); nil == err {
+		err = c.transport.Flush()
+	}
+	return
+}
+
+func (c *channel) asyncWrite(p [][]byte) (int64, error) {
+	// count of data length
+	dataLen := utils.CountOf(p)
+
+	// get buffer from asyncWrite
+	// put buffer from writeOnce
+	dataBuff := pbytes.GetLen(int(dataLen))
+	offset := 0
+	for _, b := range p {
+		if cn := copy(dataBuff[offset:], b); cn != len(b) {
+			panic(fmt.Errorf("%w: want: %d, got: %d", io.ErrShortWrite, len(b), cn))
+		} else {
+			offset += cn
+		}
+	}
+
+	// put packet to send queue
+	var packet = [][]byte{dataBuff}
+	if pushed, err := c.sendQueue.Offer(&packet); !pushed || nil != err {
+		// async write queue is a full
+		if !pushed && nil == err {
+			return 0, ErrAsyncNoSpace
+		}
+
+		// channel closed
+		if queue.ErrDisposed == err {
+			select {
+			case <-c.ctx.Done():
+				return 0, c.closeErr
+			}
+		}
+
+		return 0, err
+	}
+
+	// try send
+	if atomic.CompareAndSwapInt32(&c.running, idle, running) {
+		c.executor.Exec(c.writeOnce)
+	}
+	return dataLen, nil
 }
 
 // IsActive return true if the Channel is active and so connected
@@ -325,8 +392,8 @@ func (c *channel) writeOnce() {
 			}
 
 			// combine send bytes to reduce syscall.
-			pkts := item.([][]byte)
-			sendBuffers = append(sendBuffers, pkts...)
+			pkts := item.(*[][]byte)
+			sendBuffers = append(sendBuffers, *pkts...)
 			sendIndexes = append(sendIndexes, len(sendBuffers))
 		}
 
@@ -335,11 +402,20 @@ func (c *channel) writeOnce() {
 			utils.Assert(c.transport.Flush())
 
 			// clear buffer ref
-			for index := range sendBuffers {
-				sendBuffers[index] = nil // avoid memory leak
+			for index, buf := range sendBuffers {
+				// reuse buffer
+				pbytes.Put(buf)
+				// avoid memory leak
+				sendBuffers[index] = nil
+				// for safety
 				if index < len(sendIndexes) {
-					sendIndexes[index] = -1 // for safety
+					sendIndexes[index] = -1
 				}
+			}
+
+			// continue to send remain packets
+			if c.sendQueue.Len() > 0 {
+				continue
 			}
 		}
 

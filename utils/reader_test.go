@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"io"
 	"io/ioutil"
+	"strings"
 	"testing"
 )
 
@@ -69,7 +70,9 @@ func TestToReader(t *testing.T) {
 	t.Run("[]byte", runTest(ToReader(byteString)))
 	t.Run("[][]byte", runTest(ToReader([][]byte{byteString[:2], byteString[2:]})))
 	t.Run("string", runTest(ToReader(string(byteString))))
-	t.Run("io.Reader", runTest(ToReader(bytes.NewReader(byteString))))
+	t.Run("bytes.NewReader", runTest(ToReader(bytes.NewReader(byteString))))
+	t.Run("bytes.NewBuffer", runTest(ToReader(bytes.NewBuffer(byteString))))
+	t.Run("strings.NewReader", runTest(ToReader(strings.NewReader(string(byteString)))))
 }
 
 func TestToBytes(t *testing.T) {
@@ -89,19 +92,36 @@ func TestToBytes(t *testing.T) {
 	t.Run("[]byte", runTest(ToBytes(byteString)))
 	t.Run("[][]byte", runTest(ToBytes([][]byte{byteString[:2], byteString[2:]})))
 	t.Run("string", runTest(ToBytes(string(byteString))))
-	t.Run("io.Reader", runTest(ToBytes(bytes.NewReader(byteString))))
+	t.Run("bytes.NewReader", runTest(ToBytes(bytes.NewReader(byteString))))
+	t.Run("bytes.NewBuffer", runTest(ToBytes(bytes.NewBuffer(byteString))))
+	t.Run("strings.NewReader", runTest(ToBytes(strings.NewReader(string(byteString)))))
 }
 
 func TestCountOf(t *testing.T) {
 
 	var buffers [][]byte
 	var totalBytes int
-	for i := 0; i < 10; i ++ {
+	for i := 0; i < 10; i++ {
 		buffers = append(buffers, make([]byte, i))
 		totalBytes += i
 	}
 
 	if n := CountOf(buffers); n != int64(totalBytes) {
 		t.Fatalf("bytes not equal: %d != %d", n, totalBytes)
+	}
+}
+
+func TestStealBytes(t *testing.T) {
+
+	var byteString = []byte("GO-NETTY")
+	var reader = bytes.NewReader(byteString)
+
+	data, err := StealBytes(reader)
+	if nil != err {
+		t.Fatalf("bytes steal failed: %v", err)
+	}
+
+	if !bytes.Equal(byteString, data) {
+		t.Fatalf("bytes not equal: %v != %v", byteString, data)
 	}
 }
