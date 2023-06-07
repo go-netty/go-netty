@@ -43,7 +43,7 @@ func NewBootstrap(option ...Option) Bootstrap {
 	opts := &bootstrapOptions{
 		channelIDFactory: SequenceID(),
 		pipelineFactory:  NewPipeline,
-		channelFactory:   NewAsyncWriteChannel(64),
+		channelFactory:   NewAsyncWriteChannel(64, true),
 		transportFactory: tcp.New(),
 		executor:         AsyncExecutor(),
 	}

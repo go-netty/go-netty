@@ -31,6 +31,9 @@ var (
 	// ErrEmpty is returned when an non-applicable queue operation was called
 	// due to the queue's empty item state
 	ErrEmpty = errors.New(`queue: empty queue`)
+
+	// ErrFull is returned when an applicable queue is full.
+	ErrFull = errors.New("queue: full queue")
 )
 
 // roundUp takes a uint64 greater than 0 and rounds it up to the next
@@ -84,24 +87,22 @@ func (rb *RingBuffer) init(size uint64) {
 // call will block until an item is added to the queue or Dispose is called
 // on the queue.  An error will be returned if the queue is disposed.
 func (rb *RingBuffer) Put(item interface{}) error {
-	_, err := rb.put(item, false)
-	return err
+	return rb.put(item, false)
 }
 
 // Offer adds the provided item to the queue if there is space.  If the queue
-// is full, this call will return false.  An error will be returned if the
-// queue is disposed.
-func (rb *RingBuffer) Offer(item interface{}) (bool, error) {
+// is full, An error will be returned ErrFull. ErrDisposed returned if the queue is disposed.
+func (rb *RingBuffer) Offer(item interface{}) error {
 	return rb.put(item, true)
 }
 
-func (rb *RingBuffer) put(item interface{}, offer bool) (bool, error) {
+func (rb *RingBuffer) put(item interface{}, offer bool) error {
 	var n *rnode
 	pos := atomic.LoadUint64(&rb.queue)
 L:
 	for {
 		if atomic.LoadUint64(&rb.disposed) == 1 {
-			return false, ErrDisposed
+			return ErrDisposed
 		}
 
 		n = &rb.nodes[pos&rb.mask]
@@ -118,7 +119,7 @@ L:
 		}
 
 		if offer {
-			return false, nil
+			return ErrFull
 		}
 
 		runtime.Gosched() // free up the cpu before the next iteration
@@ -126,7 +127,7 @@ L:
 
 	n.data = item
 	atomic.StoreUint64(&n.position, pos+1)
-	return true, nil
+	return nil
 }
 
 // Get will return the next item in the queue.  This call will block

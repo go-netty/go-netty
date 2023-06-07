@@ -31,6 +31,7 @@ import (
 	"github.com/go-netty/go-netty/utils/queue"
 )
 
+// ErrAsyncNoSpace is returned when an write queue full if not writeForever flags.
 var ErrAsyncNoSpace = errors.New("async write queue is full")
 
 // Channel is defines a server-side-channel & client-side-channel
@@ -84,32 +85,32 @@ type Channel interface {
 // NewChannel create a ChannelFactory
 func NewChannel() ChannelFactory {
 	return func(id int64, ctx context.Context, pipeline Pipeline, transport transport.Transport, executor Executor) Channel {
-		return newChannelWith(ctx, pipeline, transport, executor, id, 0)
+		return newChannelWith(ctx, pipeline, transport, executor, id, 0, false)
 	}
 }
 
-// NewAsyncWriteChannel create an async write ChannelFactory
-func NewAsyncWriteChannel(capacity int) ChannelFactory {
+// NewAsyncWriteChannel create an async write ChannelFactory.
+func NewAsyncWriteChannel(writeQueueSize int, writeForever bool) ChannelFactory {
 	return func(id int64, ctx context.Context, pipeline Pipeline, transport transport.Transport, executor Executor) Channel {
-		return newChannelWith(ctx, pipeline, transport, executor, id, capacity)
+		return newChannelWith(ctx, pipeline, transport, executor, id, writeQueueSize, writeForever)
 	}
 }
 
 // newChannelWith internal method for NewChannel & NewBufferedChannel
-func newChannelWith(ctx context.Context, pipeline Pipeline, transport transport.Transport, executor Executor, id int64, capacity int) Channel {
+func newChannelWith(ctx context.Context, pipeline Pipeline, transport transport.Transport, executor Executor, id int64, writeQueueSize int, writeForever bool) Channel {
 	childCtx, cancel := context.WithCancel(ctx)
 
 	var (
-		sendQueue    *queue.RingBuffer
+		writeQueue   *queue.RingBuffer
 		writeBuffers net.Buffers
 		writeIndexes []int
 	)
 
 	// enable async write
-	if capacity > 0 {
-		sendQueue = queue.NewRingBuffer(uint64(capacity))
-		writeBuffers = make(net.Buffers, 0, (capacity/5)*2+1)
-		writeIndexes = make([]int, 0, capacity/5+1)
+	if writeQueueSize > 0 {
+		writeQueue = queue.NewRingBuffer(uint64(writeQueueSize))
+		writeBuffers = make(net.Buffers, 0, (writeQueueSize/5)*2+1)
+		writeIndexes = make([]int, 0, writeQueueSize/5+1)
 	}
 
 	return &channel{
@@ -119,9 +120,10 @@ func newChannelWith(ctx context.Context, pipeline Pipeline, transport transport.
 		pipeline:     pipeline,
 		transport:    transport,
 		executor:     executor,
-		sendQueue:    sendQueue,
+		writeQueue:   writeQueue,
 		writeBuffers: writeBuffers,
 		writeIndexes: writeIndexes,
+		writeForever: writeForever,
 	}
 }
 
@@ -137,9 +139,10 @@ type channel struct {
 	executor     Executor
 	pipeline     Pipeline
 	attachment   Attachment
-	sendQueue    *queue.RingBuffer
+	writeQueue   *queue.RingBuffer
 	writeBuffers net.Buffers
 	writeIndexes []int
+	writeForever bool
 	activeWait   sync.WaitGroup
 	closed       int32
 	running      int32
@@ -181,8 +184,8 @@ func (c *channel) Close(err error) {
 		c.transport.Close()
 		c.cancel()
 
-		if nil != c.sendQueue {
-			c.sendQueue.Dispose()
+		if nil != c.writeQueue {
+			c.writeQueue.Dispose()
 		}
 
 		c.invokeMethod(func() {
@@ -201,7 +204,7 @@ func (c *channel) Writev(p [][]byte) (n int64, err error) {
 	}
 
 	// enable async write
-	if nil != c.sendQueue {
+	if nil != c.writeQueue {
 		return c.asyncWrite(p)
 	}
 
@@ -224,7 +227,7 @@ func (c *channel) Write1(p []byte) (n int, err error) {
 	}
 
 	// enable async write
-	if nil != c.sendQueue {
+	if nil != c.writeQueue {
 		wn, err := c.asyncWrite([][]byte{p})
 		return int(wn), err
 	}
@@ -256,20 +259,24 @@ func (c *channel) asyncWrite(p [][]byte) (int64, error) {
 
 	// put packet to send queue
 	var packet = [][]byte{dataBuff}
-	if pushed, err := c.sendQueue.Offer(&packet); !pushed || nil != err {
-		// async write queue is a full
-		if !pushed && nil == err {
-			return 0, ErrAsyncNoSpace
-		}
+	var err error
 
-		// channel closed
-		if queue.ErrDisposed == err {
+	if c.writeForever {
+		err = c.writeQueue.Put(&packet)
+	} else {
+		err = c.writeQueue.Offer(&packet)
+	}
+
+	if nil != err {
+		switch {
+		case queue.ErrFull == err:
+			return 0, ErrAsyncNoSpace
+		case queue.ErrDisposed == err:
 			select {
 			case <-c.ctx.Done():
 				return 0, c.closeErr
 			}
 		}
-
 		return 0, err
 	}
 
@@ -384,9 +391,9 @@ func (c *channel) writeOnce() {
 		sendIndexes := c.writeIndexes[:0]
 
 		// more packet will be merged
-		for c.sendQueue.Len() > 0 && len(sendBuffers) < cap(sendBuffers) {
+		for c.writeQueue.Len() > 0 && len(sendBuffers) < cap(sendBuffers) {
 			// poll packet
-			item, err := c.sendQueue.Poll(-1)
+			item, err := c.writeQueue.Poll(-1)
 			if nil != err {
 				break
 			}
@@ -414,14 +421,14 @@ func (c *channel) writeOnce() {
 			}
 
 			// continue to send remain packets
-			if c.sendQueue.Len() > 0 {
+			if c.writeQueue.Len() > 0 {
 				continue
 			}
 		}
 
 		// double check
 		atomic.StoreInt32(&c.running, idle)
-		if size := c.sendQueue.Len(); size > 0 {
+		if size := c.writeQueue.Len(); size > 0 {
 			if atomic.CompareAndSwapInt32(&c.running, idle, running) {
 				continue
 			}
