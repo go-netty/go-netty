@@ -214,7 +214,6 @@ func (p *pipeline) Channel() Channel {
 
 // ServeChannel serveChannel to serve the channel
 func (p *pipeline) ServeChannel(channel Channel) {
-
 	utils.AssertIf(nil != p.channel, "already attached channel")
 	p.channel = channel
 	p.channel.serveChannel()

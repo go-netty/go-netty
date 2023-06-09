@@ -20,7 +20,6 @@ import (
 	"bytes"
 	"io/ioutil"
 	"net/http"
-	"strings"
 	"sync"
 	"testing"
 
@@ -68,7 +67,7 @@ func TestServerCodec(t *testing.T) {
 	var bootstrap = netty.NewBootstrap(netty.WithChildInitializer(childInitializer), netty.WithClientInitializer(clientInitializer))
 
 	bootstrap.Listen("127.0.0.1:9526").Async(func(err error) {
-		if nil != err && !strings.Contains(err.Error(), "use of closed network connection") {
+		if nil != err && netty.ErrServerClosed != err {
 			t.Fatal(err)
 		}
 	})

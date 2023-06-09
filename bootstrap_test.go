@@ -57,7 +57,7 @@ func TestBootstrap(t *testing.T) {
 	)
 
 	bs.Listen("127.0.0.1:9527", tcp.WithOptions(tcpOptions)).Async(func(err error) {
-		if nil != err && !strings.Contains(err.Error(), "use of closed network connection") {
+		if nil != err && ErrServerClosed != err {
 			t.Fatal(err)
 		}
 	})

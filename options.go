@@ -34,6 +34,13 @@ type (
 	TransportFactory transport.Factory
 	// ChannelIDFactory to create channel id
 	ChannelIDFactory func() int64
+	// ChannelHolder to manage channels
+	ChannelHolder interface {
+		ActiveHandler
+		InactiveHandler
+		// CloseAll close the all channels
+		CloseAll(err error)
+	}
 
 	// bootstrapOptions
 	bootstrapOptions struct {
@@ -46,6 +53,7 @@ type (
 		pipelineFactory   PipelineFactory
 		channelIDFactory  ChannelIDFactory
 		executor          Executor
+		holder            ChannelHolder
 	}
 )
 
@@ -112,5 +120,12 @@ func WithClientInitializer(initializer ChannelInitializer) Option {
 func WithExecutor(executor Executor) Option {
 	return func(options *bootstrapOptions) {
 		options.executor = executor
+	}
+}
+
+// WithChannelHolder use custom ChannelHolder
+func WithChannelHolder(holder ChannelHolder) Option {
+	return func(options *bootstrapOptions) {
+		options.holder = holder
 	}
 }

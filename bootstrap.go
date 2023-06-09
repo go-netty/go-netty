@@ -18,12 +18,16 @@ package netty
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sync"
 
 	"github.com/go-netty/go-netty/transport"
 	"github.com/go-netty/go-netty/transport/tcp"
 )
+
+// ErrServerClosed is returned by the Server call Shutdown or Close.
+var ErrServerClosed = errors.New("netty: Server closed")
 
 // Bootstrap makes it easy to bootstrap a channel
 type Bootstrap interface {
@@ -46,6 +50,7 @@ func NewBootstrap(option ...Option) Bootstrap {
 		channelFactory:   NewAsyncWriteChannel(64, true),
 		transportFactory: tcp.New(),
 		executor:         AsyncExecutor(),
+		holder:           NewChannelHolder(128),
 	}
 	opts.bootstrapCtx, opts.bootstrapCancel = context.WithCancel(context.Background())
 
@@ -67,8 +72,8 @@ func (bs *bootstrap) Context() context.Context {
 	return bs.bootstrapCtx
 }
 
-// serveTransport to serve channel
-func (bs *bootstrap) serveTransport(ctx context.Context, transport transport.Transport, attachment Attachment, childChannel bool) Channel {
+// ServeChannel to serve channel
+func (bs *bootstrap) ServeChannel(ctx context.Context, transport transport.Transport, attachment Attachment, childChannel bool) Channel {
 
 	// create a new pipeline
 	pl := bs.pipelineFactory()
@@ -91,6 +96,11 @@ func (bs *bootstrap) serveTransport(ctx context.Context, transport transport.Tra
 		bs.clientInitializer(ch)
 	}
 
+	// add a first handler for connection managed.
+	if nil != bs.holder {
+		pl.AddFirst(bs.holder)
+	}
+
 	// serve channel.
 	ch.Pipeline().ServeChannel(ch)
 	return ch
@@ -111,7 +121,7 @@ func (bs *bootstrap) Connect(url string, option ...transport.Option) (Channel, e
 	}
 
 	// serve client transport
-	return bs.serveTransport(options.Context, t, options.Attachment, false), nil
+	return bs.ServeChannel(options.Context, t, options.Attachment, false), nil
 }
 
 // Listen to the address with options
@@ -120,18 +130,27 @@ func (bs *bootstrap) Listen(url string, option ...transport.Option) Listener {
 		panic(fmt.Errorf("duplicate listener: %s", url))
 	}
 	l := &listener{bs: bs, url: url, option: option}
-	bs.listeners.Store(url, l)
+	if _, loaded := bs.listeners.LoadOrStore(url, l); loaded {
+		panic(fmt.Errorf("duplicate listener: %s", url))
+	}
 	return l
 }
 
 // Shutdown the bootstrap
 func (bs *bootstrap) Shutdown() {
+	// all channels will be canceled.
 	bs.bootstrapCancel()
 
+	// close all listener
 	bs.listeners.Range(func(key, value interface{}) bool {
 		_ = value.(Listener).Close()
 		return true
 	})
+
+	// close all channels
+	if nil != bs.holder {
+		bs.holder.CloseAll(ErrServerClosed)
+	}
 }
 
 // removeListener close the listener with url
@@ -157,10 +176,15 @@ type listener struct {
 	acceptor transport.Acceptor
 }
 
+// Acceptor returned the acceptor
+func (l *listener) Acceptor() transport.Acceptor {
+	return l.acceptor
+}
+
 // Close listener
 func (l *listener) Close() error {
+	l.bs.removeListener(l.url)
 	if l.acceptor != nil {
-		l.bs.removeListener(l.url)
 		return l.acceptor.Close()
 	}
 	return nil
@@ -186,10 +210,15 @@ func (l *listener) Sync() error {
 		// accept the transport
 		t, err := l.acceptor.Accept()
 		if nil != err {
-			return err
+			select {
+			case <-l.options.Context.Done():
+				return ErrServerClosed
+			default:
+				return err
+			}
 		}
 
-		l.bs.serveTransport(l.options.Context, t, l.options.Attachment, true)
+		l.bs.ServeChannel(l.options.Context, t, l.options.Attachment, true)
 	}
 }
 
