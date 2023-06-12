@@ -48,7 +48,13 @@ func (f *tcpFactory) Connect(options *transport.Options) (transport.Transport, e
 	if nil != err {
 		return nil, err
 	}
-	return newTcpTransport(conn.(*net.TCPConn), tcpOptions, true)
+
+	tt, err := newTcpTransport(conn.(*net.TCPConn), tcpOptions, true)
+	if nil != err {
+		_ = conn.Close()
+		return nil, err
+	}
+	return tt, nil
 }
 
 func (f *tcpFactory) Listen(options *transport.Options) (transport.Acceptor, error) {
@@ -97,7 +103,15 @@ func (t *tcpAcceptor) Accept() (transport.Transport, error) {
 			return nil, err
 		}
 
-		return newTcpTransport(conn, t.options, false)
+		// reset delay time
+		tempDelay = 0
+
+		tt, err := newTcpTransport(conn, t.options, false)
+		if nil != err {
+			_ = conn.Close()
+			return nil, err
+		}
+		return tt, nil
 	}
 }
 
