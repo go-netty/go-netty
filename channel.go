@@ -28,7 +28,6 @@ import (
 	"github.com/go-netty/go-netty/transport"
 	"github.com/go-netty/go-netty/utils"
 	"github.com/go-netty/go-netty/utils/pool/pbytes"
-	"github.com/go-netty/go-netty/utils/queue"
 )
 
 // ErrAsyncNoSpace is returned when an write queue full if not writeForever flags.
@@ -101,14 +100,14 @@ func newChannelWith(ctx context.Context, pipeline Pipeline, transport transport.
 	childCtx, cancel := context.WithCancel(ctx)
 
 	var (
-		writeQueue   *queue.RingBuffer
+		writeQueue   chan [][]byte
 		writeBuffers net.Buffers
 		writeIndexes []int
 	)
 
 	// enable async write
 	if writeQueueSize > 0 {
-		writeQueue = queue.NewRingBuffer(uint64(writeQueueSize))
+		writeQueue = make(chan [][]byte, writeQueueSize)
 		writeBuffers = make(net.Buffers, 0, (writeQueueSize/5)*2+1)
 		writeIndexes = make([]int, 0, writeQueueSize/5+1)
 	}
@@ -139,11 +138,10 @@ type channel struct {
 	executor     Executor
 	pipeline     Pipeline
 	attachment   Attachment
-	writeQueue   *queue.RingBuffer
+	writeQueue   chan [][]byte
 	writeBuffers net.Buffers
 	writeIndexes []int
 	writeForever bool
-	activeWait   sync.WaitGroup
 	closed       int32
 	running      int32
 	closeErr     error
@@ -183,10 +181,6 @@ func (c *channel) Close(err error) {
 		c.closeErr = err
 		c.transport.Close()
 		c.cancel()
-
-		if nil != c.writeQueue {
-			c.writeQueue.Dispose()
-		}
 
 		c.invokeMethod(func() {
 			c.pipeline.FireChannelInactive(err)
@@ -259,25 +253,23 @@ func (c *channel) asyncWrite(p [][]byte) (int64, error) {
 
 	// put packet to send queue
 	var packet = [][]byte{dataBuff}
-	var err error
 
 	if c.writeForever {
-		err = c.writeQueue.Put(&packet)
-	} else {
-		err = c.writeQueue.Offer(&packet)
-	}
-
-	if nil != err {
-		switch {
-		case queue.ErrFull == err:
-			return 0, ErrAsyncNoSpace
-		case queue.ErrDisposed == err:
-			select {
-			case <-c.ctx.Done():
-				return 0, c.closeErr
-			}
+		select {
+		case <-c.ctx.Done():
+			return 0, c.ctx.Err()
+		case c.writeQueue <- packet:
+			// write queue
 		}
-		return 0, err
+	} else {
+		select {
+		case <-c.ctx.Done():
+			return 0, c.ctx.Err()
+		case c.writeQueue <- packet:
+			// write queue
+		default:
+			return 0, ErrAsyncNoSpace
+		}
 	}
 
 	// try send
@@ -329,9 +321,14 @@ func (c *channel) Context() context.Context {
 
 // serveChannel start write & read routines
 func (c *channel) serveChannel() {
-	c.activeWait.Add(1)
-	c.executor.Exec(c.readLoop)
-	c.activeWait.Wait()
+	signal := make(chan struct{})
+	defer func() { <-signal }()
+
+	c.executor.Exec(func() {
+		c.readLoop(func() {
+			close(signal)
+		})
+	})
 }
 
 func (c *channel) invokeMethod(fn func()) {
@@ -353,14 +350,14 @@ func (c *channel) invokeMethod(fn func()) {
 }
 
 // readLoop reading message of channel
-func (c *channel) readLoop() {
+func (c *channel) readLoop(done func()) {
 
 	defer func() {
 		c.Close(AsException(recover()))
 	}()
 
 	func() {
-		defer c.activeWait.Done()
+		defer done()
 		c.invokeMethod(c.pipeline.FireChannelActive)
 	}()
 
@@ -391,22 +388,23 @@ func (c *channel) writeOnce() {
 		sendIndexes := c.writeIndexes[:0]
 
 		// more packet will be merged
-		for c.writeQueue.Len() > 0 && len(sendBuffers) < cap(sendBuffers) {
+		for len(sendBuffers) < cap(c.writeQueue) {
 			// poll packet
-			item, err := c.writeQueue.Poll(-1)
-			if nil != err {
-				break
+			select {
+			case pkts := <-c.writeQueue:
+				// combine send bytes to reduce syscall.
+				sendBuffers = append(sendBuffers, pkts...)
+				sendIndexes = append(sendIndexes, len(sendBuffers))
+				continue
+			default:
 			}
 
-			// combine send bytes to reduce syscall.
-			pkts := item.(*[][]byte)
-			sendBuffers = append(sendBuffers, *pkts...)
-			sendIndexes = append(sendIndexes, len(sendBuffers))
+			// no more packet to write
+			break
 		}
 
 		if len(sendBuffers) > 0 {
 			utils.AssertLong(c.transport.Writev(transport.Buffers{Buffers: sendBuffers, Indexes: sendIndexes}))
-			utils.Assert(c.transport.Flush())
 
 			// clear buffer ref
 			for index, buf := range sendBuffers {
@@ -421,14 +419,17 @@ func (c *channel) writeOnce() {
 			}
 
 			// continue to send remain packets
-			if c.writeQueue.Len() > 0 {
+			if len(c.writeQueue) > 0 {
 				continue
 			}
 		}
 
+		// flush transport buffer
+		utils.Assert(c.transport.Flush())
+
 		// double check
 		atomic.StoreInt32(&c.running, idle)
-		if size := c.writeQueue.Len(); size > 0 {
+		if size := len(c.writeQueue); size > 0 {
 			if atomic.CompareAndSwapInt32(&c.running, idle, running) {
 				continue
 			}
