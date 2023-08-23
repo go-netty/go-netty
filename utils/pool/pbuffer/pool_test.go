@@ -15,30 +15,28 @@ func TestPoolGet(t *testing.T) {
 		exactCap int
 	}{
 		{
-			min:      0,
 			max:      64,
 			cap:      24,
 			exactCap: 32,
 		},
 		{
-			min:      0,
-			max:      0,
+			max:      10,
 			cap:      24,
 			exactCap: 24,
 		},
 	} {
 		t.Run("", func(t *testing.T) {
-			p := New(test.min, test.max)
+			p := New(test.max)
 			act := p.Get(test.cap)
 			if c := act.Cap(); c < test.cap {
 				t.Errorf(
-					"Get(_, %d) retured %d-cap *bytes.Buffer; want at least %[1]d",
+					"Get(%d) retured %d-cap *bytes.Buffer; want at least %[1]d",
 					test.cap, c,
 				)
 			}
-			if c := act.Cap(); test.exactCap != 0 && c != test.exactCap {
+			if c := act.Cap(); test.exactCap != 0 && c < test.exactCap {
 				t.Errorf(
-					"Get(_, %d) retured %d-cap *bytes.Buffer; want exact %d",
+					"Get(%d) retured %d-cap *bytes.Buffer; want exact %d",
 					test.cap, c, test.exactCap,
 				)
 			}
@@ -47,9 +45,9 @@ func TestPoolGet(t *testing.T) {
 }
 
 func TestPoolPut(t *testing.T) {
-	p := New(0, 32)
+	p := New(32)
 
-	miss := bytes.NewBuffer(make([]byte, 5, 5))
+	miss := bytes.NewBuffer(make([]byte, 5, 33))
 	p.Put(miss) // Should not reuse.
 
 	hit := bytes.NewBuffer(make([]byte, 8, 8))

@@ -3,22 +3,12 @@
 package pbytes
 
 // DefaultPool is used by pacakge level functions.
-var DefaultPool = New(128, 65536)
+var DefaultPool = New(65536)
 
-// Get returns probably reused slice of bytes with at least capacity of c and
-// exactly len of n.
+// Get returns probably reused slice of bytes with capacity of c.
 // Get is a wrapper around DefaultPool.Get().
-func Get(n, c int) []byte { return DefaultPool.Get(n, c) }
-
-// GetCap returns probably reused slice of bytes with at least capacity of n.
-// GetCap is a wrapper around DefaultPool.GetCap().
-func GetCap(c int) []byte { return DefaultPool.GetCap(c) }
-
-// GetLen returns probably reused slice of bytes with at least capacity of n
-// and exactly len of n.
-// GetLen is a wrapper around DefaultPool.GetLen().
-func GetLen(n int) []byte { return DefaultPool.GetLen(n) }
+func Get(c int) *[]byte { return DefaultPool.Get(c) }
 
 // Put returns given slice to reuse pool.
 // Put is a wrapper around DefaultPool.Put().
-func Put(p []byte) { DefaultPool.Put(p) }
+func Put(p *[]byte) { DefaultPool.Put(p) }

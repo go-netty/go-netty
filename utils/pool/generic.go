@@ -8,64 +8,57 @@ import (
 
 // Pool contains logic of reusing objects distinguishable by size in generic
 // way.
-type Pool struct {
-	pool map[int]*sync.Pool
-	size func(int) int
+type Pool[T any] struct {
+	pool     []sync.Pool
+	size     func(int) int
+	stepSize int
 }
 
-// New creates new Pool that reuses objects which size is in logarithmic range
-// [min, max].
-//
-// Note that it is a shortcut for Custom() constructor with Options provided by
-// WithLogSizeMapping() and WithLogSizeRange(min, max) calls.
-func New(min, max int) *Pool {
-	return Custom(
-		WithLogSizeMapping(),
-		WithLogSizeRange(min, max),
-	)
-}
+// New creates new Pool that reuses objects which size
+func New[T any](max int) *Pool[T] {
+	maxSize := pmath.CeilToPowerOfTwo(pmath.Max(max, 1))
 
-// Custom creates new Pool with given options.
-func Custom(opts ...Option) *Pool {
-	p := &Pool{
-		pool: make(map[int]*sync.Pool),
-		size: pmath.Identity,
+	shardSize := pmath.Max(1, pmath.Min(maxSize, 64))
+	stepSize := pmath.CeilToPowerOfTwo((maxSize) / shardSize)
+	if stepSize*shardSize < maxSize {
+		shardSize++
 	}
 
-	c := (*poolConfig)(p)
-	for _, opt := range opts {
-		opt(c)
+	return &Pool[T]{
+		pool: make([]sync.Pool, shardSize),
+		size: func(i int) int {
+			if i <= stepSize {
+				return stepSize
+			}
+			return pmath.CeilToPowerOfTwo(i)
+		},
+		stepSize: stepSize,
 	}
-
-	return p
 }
 
 // Get pulls object whose generic size is at least of given size.
 // It also returns a real size of x for further pass to Put() even if x is nil.
 // Note that size could be ceiled to the next power of two.
-func (p *Pool) Get(size int) (interface{}, int) {
+func (p *Pool[T]) Get(size int) (T, int) {
 	n := p.size(size)
-	if pool := p.pool[n]; pool != nil {
-		return pool.Get(), n
+
+	if idx := (n - 1) / p.stepSize; idx < len(p.pool) {
+		if v := p.pool[idx].Get(); v != nil {
+			return v.(T), n
+		}
 	}
-	return nil, size
+
+	var zero T
+	return zero, n
 }
 
 // Put takes x and its size for future reuse.
-func (p *Pool) Put(x interface{}, size int) {
-	if pool := p.pool[size]; pool != nil {
-		pool.Put(x)
+func (p *Pool[T]) Put(x T, size int) {
+	if size < p.stepSize {
+		return
 	}
-}
 
-type poolConfig Pool
-
-// AddSize adds size n to the map.
-func (p *poolConfig) AddSize(n int) {
-	p.pool[n] = new(sync.Pool)
-}
-
-// SetSizeMapping sets up incoming size mapping function.
-func (p *poolConfig) SetSizeMapping(size func(int) int) {
-	p.size = size
+	if idx := (size - 1) / p.stepSize; idx < len(p.pool) {
+		p.pool[idx].Put(x)
+	}
 }

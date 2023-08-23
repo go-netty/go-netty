@@ -62,6 +62,8 @@ func TestBootstrap(t *testing.T) {
 		}
 	})
 
+	time.Sleep(time.Second * 2)
+	
 	ch, err := bs.Connect("tcp://127.0.0.1:9527", transport.WithAttachment("go-netty"))
 	if nil != err {
 		t.Fatal(err)

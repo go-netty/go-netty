@@ -63,3 +63,17 @@ func fillBits(n int) int {
 	n |= n >> 32
 	return n
 }
+
+func Max(a, b int) int {
+	if a < b {
+		return b
+	}
+	return a
+}
+
+func Min(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
+}

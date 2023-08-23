@@ -11,31 +11,20 @@ import (
 
 // Pool contains logic of reusing byte slices of various size.
 type Pool struct {
-	pool *pool.Pool
+	pool *pool.Pool[*bytes.Buffer]
 }
 
-// New creates new Pool that reuses slices which size is in logarithmic range
-// [min, max].
-//
-// Note that it is a shortcut for Custom() constructor with Options provided by
-// pool.WithLogSizeMapping() and pool.WithLogSizeRange(min, max) calls.
-func New(min, max int) *Pool {
-	return &Pool{pool.New(min, max)}
-}
-
-// New creates new Pool with given options.
-func Custom(opts ...pool.Option) *Pool {
-	return &Pool{pool.Custom(opts...)}
+// New creates new Pool that reuses slices which size
+func New(max int) *Pool {
+	return &Pool{pool.New[*bytes.Buffer](max)}
 }
 
 // Get returns probably reused *bytes.Buffer of bytes with at least capacity of c.
 func (p *Pool) Get(c int) *bytes.Buffer {
 	v, x := p.pool.Get(c)
 	if v != nil {
-		bts := v.(*bytes.Buffer)
-		return bts
+		return v
 	}
-
 	return bytes.NewBuffer(make([]byte, 0, x))
 }
 

@@ -10,20 +10,18 @@ func TestGenericPoolGet(t *testing.T) {
 		expSize  int
 	}{
 		{
-			min:     0,
-			max:     1,
+			max:     32,
 			get:     10,
-			expSize: 10,
+			expSize: 16,
 		},
 		{
-			min:     0,
 			max:     16,
 			get:     10,
 			expSize: 16,
 		},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			p := New(test.min, test.max)
+			p := New[any](test.max)
 			_, n := p.Get(test.get)
 			if n != test.expSize {
 				t.Errorf("Get(%d) = _, %d; want %d", test.get, n, test.expSize)

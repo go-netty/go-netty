@@ -190,11 +190,8 @@ func (c *channel) Close(err error) {
 
 // Writev to write [][]byte for optimize syscall
 func (c *channel) Writev(p [][]byte) (n int64, err error) {
-	if !c.IsActive() {
-		select {
-		case <-c.ctx.Done():
-			return 0, c.closeErr
-		}
+	if nil != c.closeErr {
+		return 0, c.closeErr
 	}
 
 	// enable async write
@@ -213,11 +210,8 @@ func (c *channel) Writev(p [][]byte) (n int64, err error) {
 
 // Write1 to write []byte to channel
 func (c *channel) Write1(p []byte) (n int, err error) {
-	if !c.IsActive() {
-		select {
-		case <-c.ctx.Done():
-			return 0, c.closeErr
-		}
+	if nil != c.closeErr {
+		return 0, c.closeErr
 	}
 
 	// enable async write
@@ -241,10 +235,11 @@ func (c *channel) asyncWrite(p [][]byte) (int64, error) {
 
 	// get buffer from asyncWrite
 	// put buffer from writeOnce
-	dataBuff := pbytes.GetLen(int(dataLen))
+	dataBuff := *pbytes.Get(int(dataLen))
+	dataBuff = dataBuff[:0]
 	offset := 0
 	for _, b := range p {
-		if cn := copy(dataBuff[offset:], b); cn != len(b) {
+		if cn := copy(dataBuff[offset:cap(dataBuff)], b); cn != len(b) {
 			panic(fmt.Errorf("%w: want: %d, got: %d", io.ErrShortWrite, len(b), cn))
 		} else {
 			offset += cn
@@ -252,19 +247,19 @@ func (c *channel) asyncWrite(p [][]byte) (int64, error) {
 	}
 
 	// put packet to send queue
-	var packet = [][]byte{dataBuff}
+	var packet = [][]byte{dataBuff[:offset]}
 
 	if c.writeForever {
 		select {
 		case <-c.ctx.Done():
-			return 0, c.ctx.Err()
+			return 0, c.closeErr
 		case c.writeQueue <- packet:
 			// write queue
 		}
 	} else {
 		select {
 		case <-c.ctx.Done():
-			return 0, c.ctx.Err()
+			return 0, c.closeErr
 		case c.writeQueue <- packet:
 			// write queue
 		default:
@@ -409,7 +404,8 @@ func (c *channel) writeOnce() {
 			// clear buffer ref
 			for index, buf := range sendBuffers {
 				// reuse buffer
-				pbytes.Put(buf)
+				buf := buf[:0]
+				pbytes.Put(&buf)
 				// avoid memory leak
 				sendBuffers[index] = nil
 				// for safety

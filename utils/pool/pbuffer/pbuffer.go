@@ -3,7 +3,7 @@ package pbuffer
 import "bytes"
 
 // DefaultPool is used by pacakge level functions.
-var DefaultPool = New(128, 65536)
+var DefaultPool = New(65536)
 
 // Get returns probably reused *bytes.Buffer of bytes with at least capacity of c
 // Get is a wrapper around DefaultPool.Get().
