@@ -100,29 +100,32 @@ func newChannelWith(ctx context.Context, pipeline Pipeline, transport transport.
 	childCtx, cancel := context.WithCancel(ctx)
 
 	var (
-		writeQueue   chan [][]byte
-		writeBuffers net.Buffers
-		writeIndexes []int
+		writeQueue     chan [][]byte
+		writeBuffers   net.Buffers
+		recycleBuffers net.Buffers
+		writeIndexes   []int
 	)
 
 	// enable async write
 	if writeQueueSize > 0 {
 		writeQueue = make(chan [][]byte, writeQueueSize)
+		recycleBuffers = make(net.Buffers, 0, (writeQueueSize/5)*2+1)
 		writeBuffers = make(net.Buffers, 0, (writeQueueSize/5)*2+1)
 		writeIndexes = make([]int, 0, writeQueueSize/5+1)
 	}
 
 	return &channel{
-		id:           id,
-		ctx:          childCtx,
-		cancel:       cancel,
-		pipeline:     pipeline,
-		transport:    transport,
-		executor:     executor,
-		writeQueue:   writeQueue,
-		writeBuffers: writeBuffers,
-		writeIndexes: writeIndexes,
-		writeForever: writeForever,
+		id:             id,
+		ctx:            childCtx,
+		cancel:         cancel,
+		pipeline:       pipeline,
+		transport:      transport,
+		executor:       executor,
+		writeQueue:     writeQueue,
+		recycleBuffers: recycleBuffers,
+		writeBuffers:   writeBuffers,
+		writeIndexes:   writeIndexes,
+		writeForever:   writeForever,
 	}
 }
 
@@ -131,21 +134,22 @@ const running = 1
 
 // implement of Channel
 type channel struct {
-	id           int64
-	ctx          context.Context
-	cancel       context.CancelFunc
-	transport    transport.Transport
-	executor     Executor
-	pipeline     Pipeline
-	attachment   Attachment
-	writeQueue   chan [][]byte
-	writeBuffers net.Buffers
-	writeIndexes []int
-	writeForever bool
-	closed       int32
-	running      int32
-	closeErr     error
-	writeLock    sync.Mutex // for sync write
+	id             int64
+	ctx            context.Context
+	cancel         context.CancelFunc
+	transport      transport.Transport
+	executor       Executor
+	pipeline       Pipeline
+	attachment     Attachment
+	writeQueue     chan [][]byte
+	recycleBuffers net.Buffers
+	writeBuffers   net.Buffers
+	writeIndexes   []int
+	writeForever   bool
+	closed         int32
+	running        int32
+	closeErr       error
+	writeLock      sync.Mutex // for sync write
 }
 
 // ID get channel id
@@ -380,6 +384,7 @@ func (c *channel) writeOnce() {
 	for {
 		// reuse buffer.
 		sendBuffers := c.writeBuffers[:0]
+		recycleBuffers := c.recycleBuffers[:0]
 		sendIndexes := c.writeIndexes[:0]
 
 		// more packet will be merged
@@ -389,6 +394,7 @@ func (c *channel) writeOnce() {
 			case pkts := <-c.writeQueue:
 				// combine send bytes to reduce syscall.
 				sendBuffers = append(sendBuffers, pkts...)
+				recycleBuffers = append(recycleBuffers, pkts...)
 				sendIndexes = append(sendIndexes, len(sendBuffers))
 				continue
 			default:
@@ -402,12 +408,13 @@ func (c *channel) writeOnce() {
 			utils.AssertLong(c.transport.Writev(transport.Buffers{Buffers: sendBuffers, Indexes: sendIndexes}))
 
 			// clear buffer ref
-			for index, buf := range sendBuffers {
+			for index, buf := range recycleBuffers {
 				// reuse buffer
 				buf := buf[:0]
 				pbytes.Put(&buf)
 				// avoid memory leak
 				sendBuffers[index] = nil
+				recycleBuffers[index] = nil
 				// for safety
 				if index < len(sendIndexes) {
 					sendIndexes[index] = -1
