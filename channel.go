@@ -89,29 +89,27 @@ func NewChannel() ChannelFactory {
 }
 
 // NewAsyncWriteChannel create an async write ChannelFactory.
-func NewAsyncWriteChannel(writeQueueSize int, writeForever bool) ChannelFactory {
+func NewAsyncWriteChannel(writeQueueSize int, untilWrite bool) ChannelFactory {
 	return func(id int64, ctx context.Context, pipeline Pipeline, transport transport.Transport, executor Executor) Channel {
-		return newChannelWith(ctx, pipeline, transport, executor, id, writeQueueSize, writeForever)
+		return newChannelWith(ctx, pipeline, transport, executor, id, writeQueueSize, untilWrite)
 	}
 }
 
 // newChannelWith internal method for NewChannel & NewBufferedChannel
-func newChannelWith(ctx context.Context, pipeline Pipeline, transport transport.Transport, executor Executor, id int64, writeQueueSize int, writeForever bool) Channel {
+func newChannelWith(ctx context.Context, pipeline Pipeline, transport transport.Transport, executor Executor, id int64, writeQueueSize int, untilWrite bool) Channel {
 	childCtx, cancel := context.WithCancel(ctx)
 
 	var (
-		writeQueue     chan [][]byte
+		writeQueue     chan []byte
 		writeBuffers   net.Buffers
 		recycleBuffers net.Buffers
-		writeIndexes   []int
 	)
 
 	// enable async write
 	if writeQueueSize > 0 {
-		writeQueue = make(chan [][]byte, writeQueueSize)
-		recycleBuffers = make(net.Buffers, 0, (writeQueueSize/5)*2+1)
-		writeBuffers = make(net.Buffers, 0, (writeQueueSize/5)*2+1)
-		writeIndexes = make([]int, 0, writeQueueSize/5+1)
+		writeQueue = make(chan []byte, writeQueueSize)
+		writeBuffers = make(net.Buffers, 0, writeQueueSize/2+1)
+		recycleBuffers = make(net.Buffers, 0, writeQueueSize/2+1)
 	}
 
 	return &channel{
@@ -124,8 +122,7 @@ func newChannelWith(ctx context.Context, pipeline Pipeline, transport transport.
 		writeQueue:     writeQueue,
 		recycleBuffers: recycleBuffers,
 		writeBuffers:   writeBuffers,
-		writeIndexes:   writeIndexes,
-		writeForever:   writeForever,
+		untilWrite:     untilWrite,
 	}
 }
 
@@ -141,11 +138,10 @@ type channel struct {
 	executor       Executor
 	pipeline       Pipeline
 	attachment     Attachment
-	writeQueue     chan [][]byte
+	writeQueue     chan []byte
 	recycleBuffers net.Buffers
 	writeBuffers   net.Buffers
-	writeIndexes   []int
-	writeForever   bool
+	untilWrite     bool
 	closed         int32
 	running        int32
 	closeErr       error
@@ -206,7 +202,7 @@ func (c *channel) Writev(p [][]byte) (n int64, err error) {
 	// sync write
 	c.writeLock.Lock()
 	defer c.writeLock.Unlock()
-	if n, err = c.transport.Writev(transport.Buffers{Buffers: p, Indexes: []int{len(p)}}); nil == err {
+	if n, err = c.transport.Writev(p); nil == err {
 		err = c.transport.Flush()
 	}
 	return
@@ -244,16 +240,16 @@ func (c *channel) asyncWrite(p [][]byte) (int64, error) {
 	offset := 0
 	for _, b := range p {
 		if cn := copy(dataBuff[offset:cap(dataBuff)], b); cn != len(b) {
-			panic(fmt.Errorf("%w: want: %d, got: %d", io.ErrShortWrite, len(b), cn))
+			return 0, fmt.Errorf("%w: want: %d, got: %d", io.ErrShortWrite, len(b), cn)
 		} else {
 			offset += cn
 		}
 	}
 
 	// put packet to send queue
-	var packet = [][]byte{dataBuff[:offset]}
+	var packet = dataBuff[:offset]
 
-	if c.writeForever {
+	if c.untilWrite {
 		select {
 		case <-c.ctx.Done():
 			return 0, c.closeErr
@@ -385,17 +381,15 @@ func (c *channel) writeOnce() {
 		// reuse buffer.
 		sendBuffers := c.writeBuffers[:0]
 		recycleBuffers := c.recycleBuffers[:0]
-		sendIndexes := c.writeIndexes[:0]
 
 		// more packet will be merged
-		for len(sendBuffers) < cap(c.writeQueue) {
+		for len(sendBuffers) < cap(sendBuffers) {
 			// poll packet
 			select {
-			case pkts := <-c.writeQueue:
+			case pkt := <-c.writeQueue:
 				// combine send bytes to reduce syscall.
-				sendBuffers = append(sendBuffers, pkts...)
-				recycleBuffers = append(recycleBuffers, pkts...)
-				sendIndexes = append(sendIndexes, len(sendBuffers))
+				sendBuffers = append(sendBuffers, pkt)
+				recycleBuffers = append(recycleBuffers, pkt)
 				continue
 			default:
 			}
@@ -405,7 +399,8 @@ func (c *channel) writeOnce() {
 		}
 
 		if len(sendBuffers) > 0 {
-			utils.AssertLong(c.transport.Writev(transport.Buffers{Buffers: sendBuffers, Indexes: sendIndexes}))
+
+			utils.AssertLong(c.transport.Writev(sendBuffers))
 
 			// clear buffer ref
 			for index, buf := range recycleBuffers {
@@ -415,10 +410,6 @@ func (c *channel) writeOnce() {
 				// avoid memory leak
 				sendBuffers[index] = nil
 				recycleBuffers[index] = nil
-				// for safety
-				if index < len(sendIndexes) {
-					sendIndexes[index] = -1
-				}
 			}
 
 			// continue to send remain packets

@@ -53,7 +53,7 @@ func (b *bufConn) Write(p []byte) (n int, err error) {
 }
 
 func (b *bufConn) Writev(buffs Buffers) (int64, error) {
-	return buffs.Buffers.WriteTo(b.rw.Writer)
+	return buffs.WriteTo(b.rw.Writer)
 }
 
 func (b *bufConn) Flush() error {
@@ -74,7 +74,7 @@ func (br *bufReadConn) Read(b []byte) (n int, err error) {
 }
 
 func (br *bufReadConn) Writev(buffs Buffers) (int64, error) {
-	return buffs.Buffers.WriteTo(br.Conn)
+	return buffs.WriteTo(br.Conn)
 }
 
 func (br *bufReadConn) Flush() error {
@@ -95,7 +95,7 @@ func (bw *bufWriteConn) Write(b []byte) (n int, err error) {
 }
 
 func (bw *bufWriteConn) Writev(buffs Buffers) (int64, error) {
-	return buffs.Buffers.WriteTo(bw.writer)
+	return buffs.WriteTo(bw.writer)
 }
 
 func (bw *bufWriteConn) Flush() error {
@@ -111,7 +111,7 @@ type rawConn struct {
 }
 
 func (r *rawConn) Writev(buffs Buffers) (int64, error) {
-	return buffs.Buffers.WriteTo(r.Conn)
+	return buffs.WriteTo(r.Conn)
 }
 
 func (r *rawConn) Flush() error {

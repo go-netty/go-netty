@@ -37,10 +37,7 @@ import (
 type Addr = net.Addr
 
 // Buffers to optimize message merging
-type Buffers struct {
-	Buffers net.Buffers
-	Indexes []int
-}
+type Buffers = net.Buffers
 
 // BuffersWriter defines writev for optimized syscall
 type BuffersWriter interface {
