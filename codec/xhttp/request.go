@@ -18,7 +18,7 @@ package xhttp
 
 import (
 	"bufio"
-	"bytes"
+	"fmt"
 	"io"
 	"net/http"
 
@@ -33,10 +33,19 @@ func (*requestCodec) HandleRead(ctx netty.InboundContext, message netty.Message)
 
 	switch r := message.(type) {
 	case io.Reader:
-		request, err := http.ReadRequest(bufio.NewReader(r))
-		utils.Assert(err)
-		if request != nil {
+		bufReader := bufio.NewReader(r)
+		for {
+			request, err := http.ReadRequest(bufReader)
+			utils.Assert(err)
+			// TODO: replace request context by the channel context
+			//
 			ctx.HandleRead(request)
+			// Close indicates whether to close the connection after
+			// replying to this request
+			if request.Close {
+				ctx.Close(fmt.Errorf("request mark closed"))
+				return
+			}
 		}
 	default:
 		ctx.HandleRead(message)
@@ -47,9 +56,7 @@ func (*requestCodec) HandleWrite(ctx netty.OutboundContext, message netty.Messag
 
 	switch r := message.(type) {
 	case *http.Request:
-		buffer := bytes.NewBuffer(nil)
-		utils.Assert(r.Write(buffer))
-		ctx.HandleWrite(buffer.Bytes())
+		utils.Assert(r.Write(ctx.Channel().Writer()))
 	default:
 		ctx.HandleWrite(message)
 	}

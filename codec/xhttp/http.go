@@ -18,11 +18,11 @@ package xhttp
 
 import (
 	"fmt"
-	"github.com/go-netty/go-netty/utils"
 	"net/http"
 
 	"github.com/go-netty/go-netty"
 	"github.com/go-netty/go-netty/codec"
+	"github.com/go-netty/go-netty/utils"
 )
 
 // ClientCodec create a http client codec
@@ -56,16 +56,20 @@ func (h *handlerAdapter) HandleRead(ctx netty.InboundContext, message netty.Mess
 	switch r := message.(type) {
 	case *http.Request:
 		// create a response writer
-		writer := NewResponseWriter(r.ProtoMajor, r.ProtoMinor)
+		writer := NewResponseWriter(r, ctx.Channel().Writer())
+		// flush response
+		defer writer.Flush()
 		// serve the http request
 		h.handler.ServeHTTP(writer, r)
-		// write the response
-		ctx.Write(writer)
 	default:
 		utils.Assert(fmt.Errorf("unrecognized type: %T", message))
 	}
 }
 
 func (*handlerAdapter) HandleWrite(ctx netty.OutboundContext, message netty.Message) {
-	ctx.HandleWrite(message)
+	panic("The request handling has been handed over to http.Handler, and nothing should be written here")
+}
+
+func (*handlerAdapter) HandleException(ctx netty.ExceptionContext, ex netty.Exception) {
+	ctx.Close(ex)
 }

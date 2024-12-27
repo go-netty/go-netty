@@ -20,7 +20,6 @@ import (
 	"bytes"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"os"
 	"sync"
 	"time"
@@ -159,20 +158,18 @@ func (fn EventHandlerFunc) HandleEvent(ctx EventContext, event Event) { fn(ctx, 
 type headHandler struct{}
 
 func (headHandler) HandleWrite(ctx OutboundContext, message Message) {
-
+	var ch = ctx.Channel()
 	switch m := message.(type) {
 	case []byte:
-		utils.AssertLength(ctx.Channel().Write1(m))
+		utils.AssertLength(ch.Write1(m))
 	case [][]byte:
-		utils.AssertLong(ctx.Channel().Writev(m))
+		utils.AssertLong(ch.Writev(m))
 	case *bytes.Buffer:
-		utils.AssertLength(ctx.Channel().Write1(m.Bytes()))
+		utils.AssertLength(ch.Write1(m.Bytes()))
 	case io.WriterTo:
-		data := utils.AssertBytes(utils.StealBytes(m))
-		utils.AssertLength(ctx.Channel().Write1(data))
+		utils.AssertLong(m.WriteTo(ch.Writer()))
 	case io.Reader:
-		data := utils.AssertBytes(ioutil.ReadAll(m))
-		utils.AssertLength(ctx.Channel().Write1(data))
+		utils.AssertLong(ch.ReadFrom(m))
 	default:
 		panic(fmt.Errorf("unsupported type: %T", m))
 	}

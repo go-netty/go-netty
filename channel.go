@@ -24,6 +24,7 @@ import (
 	"net"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	"github.com/go-netty/go-netty/transport"
 	"github.com/go-netty/go-netty/utils"
@@ -55,6 +56,13 @@ type Channel interface {
 
 	// Write1 to write []byte to channel
 	Write1(p []byte) (n int, err error)
+
+	// ReadFrom reads data from r until EOF or error.
+	// The return value n is the number of bytes read.
+	ReadFrom(r io.Reader) (n int64, err error)
+
+	// Writer return the channel writer.
+	Writer() io.Writer
 
 	// LocalAddr local address
 	LocalAddr() string
@@ -178,6 +186,16 @@ func (c *channel) Trigger(event Event) {
 // Close through the Pipeline
 func (c *channel) Close(err error) {
 	if atomic.CompareAndSwapInt32(&c.closed, 0, 1) {
+
+		// wait async send finished.
+		if nil != c.writeQueue {
+			var maxWaitNum int
+			for (c.untilWrite || maxWaitNum < 10) && atomic.LoadInt32(&c.running) != idle {
+				maxWaitNum++
+				time.Sleep(time.Millisecond * 100)
+			}
+		}
+
 		c.closeErr = err
 		c.transport.Close()
 		c.cancel()
@@ -196,7 +214,7 @@ func (c *channel) Writev(p [][]byte) (n int64, err error) {
 
 	// enable async write
 	if nil != c.writeQueue {
-		return c.asyncWrite(p)
+		return c.asyncWritev(p)
 	}
 
 	// sync write
@@ -210,13 +228,61 @@ func (c *channel) Writev(p [][]byte) (n int64, err error) {
 
 // Write1 to write []byte to channel
 func (c *channel) Write1(p []byte) (n int, err error) {
+	return c.write1(p, true)
+}
+
+// ReadFrom reads data from r until EOF or error.
+// The return value n is the number of bytes read.
+func (c *channel) ReadFrom(r io.Reader) (n int64, err error) {
+	if nil != c.closeErr {
+		return 0, c.closeErr
+	}
+
+	const MinRead = 1024
+
+	for {
+		dataBuff := *pbytes.Get(MinRead)
+		dataBuff = dataBuff[:MinRead]
+
+		rn, rerr := r.Read(dataBuff)
+		if rn < 0 {
+			panic("reader returned negative count from Read")
+		}
+		n += int64(rn)
+		if rn > 0 {
+			wn, werr := c.write1(dataBuff[:rn], false)
+			if nil != werr {
+				return n, werr
+			}
+			if wn != rn {
+				return n, io.ErrShortWrite
+			}
+		} else {
+			dataBuff = dataBuff[:0]
+			pbytes.Put(&dataBuff)
+		}
+
+		if rerr != nil {
+			if rerr == io.EOF {
+				return n, nil
+			}
+			return n, rerr
+		}
+	}
+}
+
+func (c *channel) Writer() io.Writer {
+	return channelWriter{c}
+}
+
+func (c *channel) write1(p []byte, clone bool) (n int, err error) {
 	if nil != c.closeErr {
 		return 0, c.closeErr
 	}
 
 	// enable async write
 	if nil != c.writeQueue {
-		wn, err := c.asyncWrite([][]byte{p})
+		wn, err := c.asyncWrite(p, clone)
 		return int(wn), err
 	}
 
@@ -229,7 +295,50 @@ func (c *channel) Write1(p []byte) (n int, err error) {
 	return
 }
 
-func (c *channel) asyncWrite(p [][]byte) (int64, error) {
+func (c *channel) asyncWrite(p []byte, clone bool) (int64, error) {
+	// count of data length
+	dataLen := len(p)
+
+	if clone {
+		dataBuff := *pbytes.Get(dataLen)
+		dataBuff = dataBuff[:dataLen]
+
+		if n := copy(dataBuff, p); n != dataLen {
+			return 0, fmt.Errorf("%w: want: %d, got: %d", io.ErrShortWrite, len(p), n)
+		}
+
+		p = dataBuff
+	}
+
+	// put packet to send queue
+	var packet = p
+
+	if c.untilWrite {
+		select {
+		case <-c.ctx.Done():
+			return 0, c.closeErr
+		case c.writeQueue <- packet:
+			// write queue
+		}
+	} else {
+		select {
+		case <-c.ctx.Done():
+			return 0, c.closeErr
+		case c.writeQueue <- packet:
+			// write queue
+		default:
+			return 0, ErrAsyncNoSpace
+		}
+	}
+
+	// try send
+	if atomic.CompareAndSwapInt32(&c.running, idle, running) {
+		c.executor.Exec(c.writeOnce)
+	}
+	return int64(dataLen), nil
+}
+
+func (c *channel) asyncWritev(p [][]byte) (int64, error) {
 	// count of data length
 	dataLen := utils.CountOf(p)
 
@@ -373,6 +482,7 @@ func (c *channel) writeOnce() {
 
 	defer func() {
 		if err := recover(); nil != err {
+			atomic.StoreInt32(&c.running, idle)
 			c.Close(AsException(err))
 		}
 	}()
@@ -432,4 +542,12 @@ func (c *channel) writeOnce() {
 		// no packets to send
 		break
 	}
+}
+
+type channelWriter struct {
+	channel Channel
+}
+
+func (c channelWriter) Write(p []byte) (n int, err error) {
+	return c.channel.Write1(p)
 }

@@ -62,6 +62,9 @@ func TestServerCodec(t *testing.T) {
 					t.Fatal(httpMessage, "!=", respBytes)
 				}
 				ctx.HandleRead(message)
+			})).
+			AddLast(netty.ExceptionHandlerFunc(func(ctx netty.ExceptionContext, ex netty.Exception) {
+				ctx.Close(ex)
 			}))
 	}
 

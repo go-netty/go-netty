@@ -18,7 +18,6 @@ package xhttp
 
 import (
 	"bufio"
-	"bytes"
 	"fmt"
 	"net/http"
 
@@ -30,9 +29,7 @@ type responseCodec struct {
 }
 
 func (*responseCodec) HandleRead(ctx netty.InboundContext, message netty.Message) {
-
 	reader := utils.MustToReader(message)
-
 	response, err := http.ReadResponse(bufio.NewReader(reader), nil)
 	utils.Assert(err)
 	ctx.HandleRead(response)
@@ -42,13 +39,8 @@ func (*responseCodec) HandleWrite(ctx netty.OutboundContext, message netty.Messa
 
 	switch r := message.(type) {
 	case *http.Response:
-		buffer := bytes.NewBuffer(nil)
-		utils.Assert(r.Write(buffer))
-		ctx.HandleWrite(buffer.Bytes())
-	case *responseWriter:
-		buffer := bytes.NewBuffer(nil)
-		utils.Assert(r.response().Write(buffer))
-		ctx.HandleWrite(buffer.Bytes())
+		utils.Assert(r.Write(ctx.Channel().Writer()))
+	case ResponseWriter:
 	default:
 		utils.Assert(fmt.Errorf("unrecognized type: %T", message))
 	}
