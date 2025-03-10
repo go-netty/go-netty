@@ -57,6 +57,14 @@ type Channel interface {
 	// Write1 to write []byte to channel
 	Write1(p []byte) (n int, err error)
 
+	// CtxWrite1 channels with asynchronous write enabled, writes will block until the write is successfully sent to the queue or times out.
+	// for synchronous write channels, SetWriteDeadline will be called to ensure that the blocking write operation is interrupted after a timeout.
+	CtxWrite1(ctx context.Context, p []byte) (n int, err error)
+
+	// CtxWritev channels with asynchronous write enabled, writes will block until the write is successfully sent to the queue or times out.
+	// for synchronous write channels, SetWriteDeadline will be called to ensure that the blocking write operation is interrupted after a timeout.
+	CtxWritev(ctx context.Context, pv [][]byte) (n int64, err error)
+
 	// ReadFrom reads data from r until EOF or error.
 	// The return value n is the number of bytes read.
 	ReadFrom(r io.Reader) (n int64, err error)
@@ -214,7 +222,7 @@ func (c *channel) Writev(p [][]byte) (n int64, err error) {
 
 	// enable async write
 	if nil != c.writeQueue {
-		return c.asyncWritev(p)
+		return c.asyncWritev(context.Background(), p)
 	}
 
 	// sync write
@@ -229,6 +237,60 @@ func (c *channel) Writev(p [][]byte) (n int64, err error) {
 // Write1 to write []byte to channel
 func (c *channel) Write1(p []byte) (n int, err error) {
 	return c.write1(p, true)
+}
+
+// CtxWrite1 channels with asynchronous write enabled, writes will block until the write is successfully sent to the queue or times out.
+// for synchronous write channels, SetDeadline will be called to ensure that the blocking write operation is interrupted after a timeout.
+func (c *channel) CtxWrite1(ctx context.Context, p []byte) (n int, err error) {
+	// enable async write
+	if nil != c.writeQueue {
+		wn, err := c.asyncWrite(ctx, p, true)
+		return int(wn), err
+	}
+
+	// sync write
+	c.writeLock.Lock()
+	defer c.writeLock.Unlock()
+
+	if deadline, ok := ctx.Deadline(); ok {
+		if err = c.transport.SetWriteDeadline(deadline); nil != err {
+			return
+		}
+		// reset write deadline
+		defer c.transport.SetWriteDeadline(time.Time{})
+	}
+
+	if n, err = c.transport.Write(p); nil == err {
+		err = c.transport.Flush()
+	}
+	return
+}
+
+// CtxWritev channels with asynchronous write enabled, writes will block until the write is successfully sent to the queue or times out.
+// for synchronous write channels, SetDeadline will be called to ensure that the blocking write operation is interrupted after a timeout.
+func (c *channel) CtxWritev(ctx context.Context, pv [][]byte) (n int64, err error) {
+	// enable async write
+	if nil != c.writeQueue {
+		wn, err := c.asyncWritev(ctx, pv)
+		return wn, err
+	}
+
+	// sync write
+	c.writeLock.Lock()
+	defer c.writeLock.Unlock()
+
+	if deadline, ok := ctx.Deadline(); ok {
+		if err = c.transport.SetWriteDeadline(deadline); nil != err {
+			return
+		}
+		// reset write deadline
+		defer c.transport.SetWriteDeadline(time.Time{})
+	}
+
+	if n, err = c.transport.Writev(pv); nil == err {
+		err = c.transport.Flush()
+	}
+	return
 }
 
 // ReadFrom reads data from r until EOF or error.
@@ -282,7 +344,7 @@ func (c *channel) write1(p []byte, clone bool) (n int, err error) {
 
 	// enable async write
 	if nil != c.writeQueue {
-		wn, err := c.asyncWrite(p, clone)
+		wn, err := c.asyncWrite(context.Background(), p, clone)
 		return int(wn), err
 	}
 
@@ -295,7 +357,7 @@ func (c *channel) write1(p []byte, clone bool) (n int, err error) {
 	return
 }
 
-func (c *channel) asyncWrite(p []byte, clone bool) (int64, error) {
+func (c *channel) asyncWrite(ctx context.Context, p []byte, clone bool) (int64, error) {
 	// count of data length
 	dataLen := len(p)
 
@@ -315,6 +377,8 @@ func (c *channel) asyncWrite(p []byte, clone bool) (int64, error) {
 
 	if c.untilWrite {
 		select {
+		case <-ctx.Done():
+			return 0, ctx.Err()
 		case <-c.ctx.Done():
 			return 0, c.closeErr
 		case c.writeQueue <- packet:
@@ -322,6 +386,8 @@ func (c *channel) asyncWrite(p []byte, clone bool) (int64, error) {
 		}
 	} else {
 		select {
+		case <-ctx.Done():
+			return 0, ctx.Err()
 		case <-c.ctx.Done():
 			return 0, c.closeErr
 		case c.writeQueue <- packet:
@@ -338,7 +404,7 @@ func (c *channel) asyncWrite(p []byte, clone bool) (int64, error) {
 	return int64(dataLen), nil
 }
 
-func (c *channel) asyncWritev(p [][]byte) (int64, error) {
+func (c *channel) asyncWritev(ctx context.Context, p [][]byte) (int64, error) {
 	// count of data length
 	dataLen := utils.CountOf(p)
 
@@ -360,6 +426,8 @@ func (c *channel) asyncWritev(p [][]byte) (int64, error) {
 
 	if c.untilWrite {
 		select {
+		case <-ctx.Done():
+			return 0, ctx.Err()
 		case <-c.ctx.Done():
 			return 0, c.closeErr
 		case c.writeQueue <- packet:
@@ -367,6 +435,8 @@ func (c *channel) asyncWritev(p [][]byte) (int64, error) {
 		}
 	} else {
 		select {
+		case <-ctx.Done():
+			return 0, ctx.Err()
 		case <-c.ctx.Done():
 			return 0, c.closeErr
 		case c.writeQueue <- packet:
