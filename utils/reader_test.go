@@ -19,7 +19,6 @@ package utils
 import (
 	"bytes"
 	"io"
-	"io/ioutil"
 	"strings"
 	"testing"
 )
@@ -57,12 +56,12 @@ func TestToReader(t *testing.T) {
 			if nil != err {
 				t.Fatal(err)
 			}
-			readBytes, err := ioutil.ReadAll(reader)
+			readBytes, err := io.ReadAll(reader)
 			if nil != err {
 				t.Fatal(err)
 			}
 			if !bytes.Equal(byteString, readBytes) {
-				t.Fatalf("unexpecteded bytes: %v != %v", byteString, readBytes)
+				t.Fatalf("unexpected bytes: %v != %v", byteString, readBytes)
 			}
 		}
 	}
@@ -84,7 +83,7 @@ func TestToBytes(t *testing.T) {
 				t.Fatal(err)
 			}
 			if !bytes.Equal(byteString, readBytes) {
-				t.Fatalf("unexpecteded bytes: %v != %v", byteString, readBytes)
+				t.Fatalf("unexpected bytes: %v != %v", byteString, readBytes)
 			}
 		}
 	}

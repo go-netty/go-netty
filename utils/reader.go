@@ -20,7 +20,6 @@ import (
 	"bytes"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"strings"
 )
 
@@ -101,7 +100,7 @@ func ToBytes(message interface{}) ([]byte, error) {
 	case io.WriterTo:
 		return StealBytes(r)
 	case io.Reader:
-		return ioutil.ReadAll(r)
+		return io.ReadAll(r)
 	default:
 		return nil, fmt.Errorf("unrecognized type: %T", message)
 	}
