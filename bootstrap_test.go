@@ -56,14 +56,20 @@ func TestBootstrap(t *testing.T) {
 		WithTransport(tcp.New()),
 	)
 
-	bs.Listen("127.0.0.1:9527", tcp.WithOptions(tcpOptions)).Async(func(err error) {
+	l := bs.Listen("127.0.0.1:9527", tcp.WithOptions(tcpOptions))
+
+	if err := l.Acquire(); nil != err {
+		t.Fatal(err)
+	}
+
+	l.Async(func(err error) {
 		if nil != err && ErrServerClosed != err {
 			t.Fatal(err)
 		}
 	})
 
 	time.Sleep(time.Second * 2)
-	
+
 	ch, err := bs.Connect("tcp://127.0.0.1:9527", transport.WithAttachment("go-netty"))
 	if nil != err {
 		t.Fatal(err)

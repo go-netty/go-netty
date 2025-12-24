@@ -159,6 +159,8 @@ func (bs *bootstrap) removeListener(url string) {
 }
 
 type Listener interface {
+	// Acquire listen announces on the local network address
+	Acquire() error
 	// Close the listener
 	Close() error
 	// Sync waits for this listener until it is done
@@ -181,6 +183,23 @@ func (l *listener) Acceptor() transport.Acceptor {
 	return l.acceptor
 }
 
+// Acquire listen announces on the local network address
+func (l *listener) Acquire() error {
+	if nil != l.acceptor {
+		return nil
+	}
+
+	var err error
+	if l.options, err = transport.ParseOptions(l.bs.Context(), l.url, l.option...); nil != err {
+		return err
+	}
+
+	if l.acceptor, err = l.bs.transportFactory.Listen(l.options); nil != err {
+		return err
+	}
+	return nil
+}
+
 // Close listener
 func (l *listener) Close() error {
 	l.bs.removeListener(l.url)
@@ -193,16 +212,7 @@ func (l *listener) Close() error {
 // Sync accept new transport from listener
 func (l *listener) Sync() error {
 
-	if nil != l.acceptor {
-		return fmt.Errorf("duplicate call Listener:Sync")
-	}
-
-	var err error
-	if l.options, err = transport.ParseOptions(l.bs.Context(), l.url, l.option...); nil != err {
-		return err
-	}
-
-	if l.acceptor, err = l.bs.transportFactory.Listen(l.options); nil != err {
+	if err := l.Acquire(); nil != err {
 		return err
 	}
 
